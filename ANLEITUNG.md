@@ -2,7 +2,7 @@
 
 Offline-KI fürs Programmieren auf deinem Mini-PC, bedient komplett aus der Ferne über den Browser.
 
-> **Stand 0.3.0 – noch nicht auf echter Hardware getestet.**
+> **Stand 0.3.1 – noch nicht auf echter Hardware getestet.**
 > Server, Oberfläche, Statusseite und Passwort-Vorbereitung wurden in einer Testumgebung geprüft.
 > USB-Stick, Ubuntu-Installation, Ruhezustand und Wake-on-LAN laufen zum ersten Mal auf deinem Mini-PC.
 

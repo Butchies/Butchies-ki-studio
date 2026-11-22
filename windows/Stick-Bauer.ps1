@@ -159,7 +159,8 @@ if ($confirm -cne "JA") { Fehler "Abgebrochen – nichts wurde verändert." }
 Titel "4/5  Stick wird erstellt"
 Info "Lösche und formatiere den Stick (FAT32) …"
 $disk | Set-Disk -IsReadOnly $false -ErrorAction SilentlyContinue
-$disk | Clear-Disk -RemoveData -RemoveOEM -Confirm:$false
+# Ein ganz neuer (RAW) Stick lässt sich nicht "leeren" – dann direkt weiter
+if ($disk.PartitionStyle -ne "RAW") { $disk | Clear-Disk -RemoveData -RemoveOEM -Confirm:$false }
 $disk = Get-Disk -Number $disk.Number
 if ($disk.PartitionStyle -eq "RAW") { $disk | Initialize-Disk -PartitionStyle MBR }
 $size = [uint64]([Math]::Min([double]$disk.Size - 16MB, [double]30GB))   # FAT32 unter Windows max. 32 GB

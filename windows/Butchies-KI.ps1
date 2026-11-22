@@ -141,7 +141,8 @@ function WindowsDesign {
   try { $light = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize").AppsUseLightTheme -ne 0 } catch {}
   $acc = [Drawing.Color]::FromArgb(0, 103, 192)
   try {
-    $v = [uint32](Get-ItemProperty "HKCU:\Software\Microsoft\Windows\DWM").AccentColor
+    # DWORD kann als negative Zahl kommen – nur mit -band zerlegen, nicht nach [uint32] umwandeln
+    $v = [int64](Get-ItemProperty "HKCU:\Software\Microsoft\Windows\DWM").AccentColor
     $acc = [Drawing.Color]::FromArgb($v -band 0xFF, ($v -shr 8) -band 0xFF, ($v -shr 16) -band 0xFF)
   } catch {}
   if (-not $light) {  # im dunklen Design hellere Variante wie Windows

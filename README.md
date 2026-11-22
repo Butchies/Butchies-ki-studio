@@ -10,4 +10,4 @@ Taskleisten-Programm für Windows und Erweiterungen (Bilder verstehen, Sprache, 
 
 Schritt-für-Schritt-Anleitung: **Anleitung.pdf** (mit Bildern) bzw. **[ANLEITUNG.md](ANLEITUNG.md)**.
 
-Version: 0.3.0 – nicht auf echter Hardware getestet.
+Version: 0.3.1 – nicht auf echter Hardware getestet.
