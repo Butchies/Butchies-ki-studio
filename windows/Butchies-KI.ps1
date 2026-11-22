@@ -241,9 +241,7 @@ $xamlVorlage = @'
     <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.35"/></Border.Effect>
     <StackPanel>
       <DockPanel LastChildFill="True">
-        <Border DockPanel.Dock="Left" Width="40" Height="40" CornerRadius="10" Background="%Accent%" Margin="0,0,12,0">
-          <TextBlock Text="KI" FontWeight="Bold" FontSize="15" Foreground="%OnAccent%" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-        </Border>
+<Border DockPanel.Dock="Left" Margin="0,0,12,0"><Viewbox Width="42" Height="42"><Canvas Width="100" Height="100"><Rectangle Canvas.Left="4" Canvas.Top="4" Width="92" Height="92" RadiusX="22" RadiusY="22" Fill="#0067C0"/><Path Data="M33,24 H53 C63,24 69,29 69,37 C69,42 66,46 62,47 C68,48 72,53 72,59 C72,68 65,74 54,74 H33 Z" Stroke="White" StrokeThickness="8" StrokeLineJoin="Round"/><Ellipse Canvas.Left="72.5" Canvas.Top="16.5" Width="11" Height="11" Fill="#9FD8FF"/><Line X1="69" Y1="31" X2="75" Y2="25" Stroke="#9FD8FF" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox></Border>
         <Border x:Name="Pill" DockPanel.Dock="Right" CornerRadius="10" Padding="10,3" VerticalAlignment="Center">
           <TextBlock x:Name="PillText" FontSize="12"/>
         </Border>
