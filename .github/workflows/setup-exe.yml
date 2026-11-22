@@ -3,7 +3,6 @@ name: Setup.exe bauen
 on:
   push:
     branches: [main]
-    paths: ["windows/**", ".github/workflows/setup-exe.yml"]
   workflow_dispatch:
 
 jobs:
@@ -16,12 +15,27 @@ jobs:
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module ps2exe -Scope CurrentUser -Force
+      - name: Paket in Setup einbetten
+        shell: powershell
+        run: |
+          $tmp = Join-Path $env:RUNNER_TEMP "pkg\butchies-ki-studio"
+          New-Item -ItemType Directory -Force -Path "$tmp\windows" | Out-Null
+          Copy-Item -Recurse installer, server -Destination $tmp
+          Copy-Item VERSION, modelle.json, Anleitung.pdf, ANLEITUNG.md -Destination $tmp
+          Copy-Item windows\Butchies-KI.ps1 "$tmp\windows\"
+          $zip = Join-Path $env:RUNNER_TEMP "payload.zip"
+          Compress-Archive -Path $tmp -DestinationPath $zip -Force
+          $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($zip))
+          $src = [IO.File]::ReadAllText("windows\Setup.ps1")
+          $src = $src.Replace('"__PAYLOAD__"', '"' + $b64 + '"')
+          [IO.File]::WriteAllText("$env:RUNNER_TEMP\Setup-komplett.ps1", $src, (New-Object Text.UTF8Encoding($true)))
       - name: Butchies-KI-Setup.exe erstellen
         shell: powershell
         run: |
           Import-Module ps2exe
-          Invoke-ps2exe -inputFile windows\Setup.ps1 -outputFile Butchies-KI-Setup.exe -noConsole -requireAdmin `
-            -title "Butchies KI Studio Setup" -product "Butchies KI Studio" -company "Butchies" -version "0.4.0.0"
+          $v = (Get-Content VERSION -Raw).Trim() + ".0"
+          Invoke-ps2exe -inputFile "$env:RUNNER_TEMP\Setup-komplett.ps1" -outputFile Butchies-KI-Setup.exe -noConsole -requireAdmin `
+            -title "Butchies KI Studio Setup" -product "Butchies KI Studio" -company "Butchies" -version $v
       - uses: actions/upload-artifact@v4
         with:
           name: Butchies-KI-Setup

@@ -12,7 +12,9 @@ param([switch]$Elevated)
 
 $ErrorActionPreference = "Stop"
 $Repo = "Butchies/Butchies-ki-studio"
-$SetupVersion = "0.4.0"
+$SetupVersion = "0.4.1"
+# Komplettes Paket (installer, server, Taskleiste) – wird beim Bauen der EXE eingefügt
+$EmbeddedPayload = "__PAYLOAD__"
 
 # --- Administratorrechte (für das Formatieren des Sticks) ---------------------------
 $admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -36,7 +38,7 @@ $sync = [hashtable]::Synchronized(@{
   Ver = 0; Rows = (New-Object Collections.ArrayList); Percent = -1; PercentText = ""; Busy = $false; Done = ""; Error = ""
   Autopilot = $true; Log = (New-Object Collections.ArrayList)
   Repo = $Repo; Cache = $Cache; Home = $Home2; ScriptDir = $ScriptDir; SetupVersion = $SetupVersion
-  Latest = ""; Catalog = $null; Disks = @(); Choice = @{}; Follow = $null; ExtractDir = ""
+  Latest = ""; Catalog = $null; Embedded = $EmbeddedPayload; Disks = @(); Choice = @{}; Follow = $null; ExtractDir = ""
 })
 
 # =====================================================================================
@@ -227,6 +229,11 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     Expand-Archive -Path $zip -DestinationPath $dir -Force
   } catch { Log "GitHub nicht erreichbar – nehme gespeicherten Stand" }
+  if (-not (Test-Path $dir) -and $sync.Embedded -and $sync.Embedded -ne ("__PAY" + "LOAD__")) {
+    Log "Nehme das in der Setup.exe enthaltene Paket"
+    [IO.File]::WriteAllBytes($zip, [Convert]::FromBase64String($sync.Embedded))
+    Expand-Archive -Path $zip -DestinationPath $dir -Force
+  }
   $root = Get-ChildItem $dir -Directory -ErrorAction SilentlyContinue | Where-Object { Test-Path (Join-Path $_.FullName "server\server.py") } | Select-Object -First 1
   if ($root) { $sync.ExtractDir = $root.FullName }
   elseif (Test-Path (Join-Path (Split-Path $sync.ScriptDir -Parent) "server\server.py")) { $sync.ExtractDir = Split-Path $sync.ScriptDir -Parent }
