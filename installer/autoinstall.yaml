@@ -1,0 +1,70 @@
+#cloud-config
+# Butchies KI Studio – automatische Installation von Ubuntu Server 24.04 LTS
+#
+# Diese Datei liegt im Hauptverzeichnis des USB-Sticks. Der Stick-Bauer setzt
+# in grub.cfg den Startparameter "autoinstall", dadurch läuft alles ohne Fragen.
+#
+# WICHTIG: __DISK__ und __PWHASH__ werden erst auf dem Mini-PC von early.sh
+# ersetzt – und nur dann, wenn genau EINE eingebaute SSD vorhanden und diese
+# komplett leer ist. Sonst bricht die Installation ab, bevor etwas gelöscht wird.
+autoinstall:
+  version: 1
+  interactive-sections: []
+  refresh-installer:
+    update: false
+  locale: de_DE.UTF-8
+  keyboard:
+    layout: de
+  timezone: Europe/Berlin
+
+  network:
+    version: 2
+    ethernets:
+      lan:
+        match:
+          name: "e*"
+        dhcp4: true
+        dhcp6: true
+        wakeonlan: true
+        optional: true
+
+  identity:
+    hostname: __HOSTNAME__
+    username: __USERNAME__
+    realname: Butchies
+    password: "__PWHASH__"
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  storage:
+    layout:
+      name: direct
+      match:
+        path: __DISK__
+
+  updates: security
+  packages:
+    - avahi-daemon
+    - ethtool
+    - curl
+    - unzip
+    - efibootmgr
+    - libvulkan1
+    - mesa-vulkan-drivers
+    - pciutils
+    - unattended-upgrades
+
+  reporting:
+    butchies:
+      type: webhook
+      endpoint: http://127.0.0.1/event
+
+  early-commands:
+    - bash /cdrom/butchies/installer/early.sh
+
+  late-commands:
+    - bash /cdrom/butchies/installer/late.sh
+
+  shutdown: reboot

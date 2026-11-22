@@ -1,0 +1,11 @@
+[Unit]
+Description=Butchies KI Studio - Wake-on-LAN einschalten
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/butchies-ki/wol-enable.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

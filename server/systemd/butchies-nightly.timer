@@ -1,0 +1,10 @@
+[Unit]
+Description=Butchies KI Studio - weckt den Mini-PC um 3 Uhr fuer Sicherheitsupdates
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+WakeSystem=true
+Persistent=false
+
+[Install]
+WantedBy=timers.target

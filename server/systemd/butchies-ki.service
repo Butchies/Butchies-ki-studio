@@ -1,0 +1,15 @@
+[Unit]
+Description=Butchies KI Studio (Browser-Oberflaeche + KI-Steuerung)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/butchies-ki/server.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+# KI und Oberflaeche duerfen viel Speicher nutzen, aber nicht das System abwuergen
+OOMScoreAdjust=200
+
+[Install]
+WantedBy=multi-user.target
