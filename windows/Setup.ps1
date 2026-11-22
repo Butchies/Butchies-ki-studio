@@ -12,7 +12,7 @@ param([switch]$Elevated)
 
 $ErrorActionPreference = "Stop"
 $Repo = "Butchies/Butchies-ki-studio"
-$SetupVersion = "0.4.2"
+$SetupVersion = "0.4.3"
 # Komplettes Paket (installer, server, Taskleiste) – wird beim Bauen der EXE eingefügt
 $EmbeddedPayload = "__PAYLOAD__"
 
@@ -120,10 +120,12 @@ switch ($task) {
 
 "system" {
   $sync.Rows.Clear(); $ok = $true
-  $os = [Environment]::OSVersion.Version
-  $build = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion").DisplayVersion
-  $name = if ($os.Build -ge 22000) { "Windows 11" } else { "Windows 10" }
-  if ($os.Major -ge 10 -and $os.Build -ge 17763 -and [Environment]::Is64BitOperatingSystem) { Row os ok "Windows 10 oder 11 (64 Bit)" "ab Windows 10 Version 1809" "$name $build" }
+  # [Environment]::OSVersion meldet in der EXE fälschlich Windows 8 (6.2) – deshalb aus der Registry lesen
+  $cv = Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+  $major = [int]$cv.CurrentMajorVersionNumber; $bnum = [int]$cv.CurrentBuildNumber
+  $build = $cv.DisplayVersion
+  $name = if ($bnum -ge 22000) { "Windows 11" } else { "Windows 10" }
+  if ($major -ge 10 -and $bnum -ge 17763 -and [Environment]::Is64BitOperatingSystem) { Row os ok "Windows 10 oder 11 (64 Bit)" "ab Windows 10 Version 1809" "$name $build" }
   else { Row os bad "Windows 10 oder 11 (64 Bit)" "Dieses Windows ist zu alt" "$name $build"; $ok = $false }
   Start-Sleep -Milliseconds 300
   Row admin ok "Administratorrechte" "nötig für das Formatieren des Sticks"
