@@ -450,7 +450,7 @@ function FensterAktualisieren {
   } else {
     $n.Sub.Text = "$($sync.Host).local"
     $n.Info.Text = switch ($state) {
-      "schlaeft" { if ($sync.LastSeen) { "Zuletzt wach: $($sync.LastSeen.ToString('HH:mm')) Uhr. „Aufwecken“ oder „Oberfläche öffnen“ weckt ihn." } else { "Nicht erreichbar – schläft er, oder ist er aus?" } }
+      "schlaeft" { if ($sync.LastSeen) { "Zuletzt wach: $($sync.LastSeen.ToString('HH:mm')) Uhr. »Aufwecken« oder »Oberfläche öffnen« weckt ihn." } else { "Nicht erreichbar – schläft er, oder ist er aus?" } }
       "anmelden" { "Einmal anmelden, dann zeigt das Fenster alle Werte." }
       default { "Verbinde …" }
     }

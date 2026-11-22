@@ -12,7 +12,7 @@ param([switch]$Elevated)
 
 $ErrorActionPreference = "Stop"
 $Repo = "Butchies/Butchies-ki-studio"
-$SetupVersion = "0.4.1"
+$SetupVersion = "0.4.2"
 # Komplettes Paket (installer, server, Taskleiste) – wird beim Bauen der EXE eingefügt
 $EmbeddedPayload = "__PAYLOAD__"
 
@@ -160,7 +160,7 @@ switch ($task) {
   Row dir spin "Programmordner anlegen" $sync.Home
   New-Item -ItemType Directory -Force -Path $sync.Home | Out-Null
   Row dir ok "Programmordner anlegen" $sync.Home; Pct 15
-  Row tray spin "Taskleisten-Programm „Butchies KI“" "Status-Symbol mit Auslastung"
+  Row tray spin "Taskleisten-Programm »Butchies KI«" "Status-Symbol mit Auslastung"
   Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue |
     Where-Object { $_.CommandLine -match 'Weck-Helfer\.ps1|Butchies-KI\.ps1' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -168,7 +168,7 @@ switch ($task) {
   $host2 = $sync.Choice.Host; if (-not $host2) { $host2 = "butchies-ki" }
   $tcfg = Join-Path $sync.Home "taskleiste.json"
   if (-not (Test-Path $tcfg)) { @{ host = $host2; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tcfg -Encoding UTF8 }
-  Row tray ok "Taskleisten-Programm „Butchies KI“" "Status-Symbol mit Auslastung"; Pct 35
+  Row tray ok "Taskleisten-Programm »Butchies KI«" "Status-Symbol mit Auslastung"; Pct 35
   $ps1 = Join-Path $sync.Home "Butchies-KI.ps1"
   $sh = New-Object -ComObject WScript.Shell
   $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -191,7 +191,7 @@ switch ($task) {
   $l = $sh.CreateShortcut((Join-Path $startup "Butchies KI.lnk"))
   $l.TargetPath = "powershell.exe"; $l.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ps1`""; $l.WindowStyle = 7; $l.Save()
   Row auto ok "Mit Windows starten" "Autostart"; Pct 80
-  Row unin spin "Eintrag in „Apps & Features“" "zum sauberen Deinstallieren"
+  Row unin spin "Eintrag in »Apps & Features«" "zum sauberen Deinstallieren"
   $un = Join-Path $sync.Home "Deinstallieren.ps1"
   @'
 $ErrorActionPreference = "SilentlyContinue"
@@ -214,7 +214,7 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
   Set-ItemProperty $k -Name UninstallString -Value "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$un`""
   Set-ItemProperty $k -Name NoModify -Value 1 -Type DWord
   Set-ItemProperty $k -Name NoRepair -Value 1 -Type DWord
-  Row unin ok "Eintrag in „Apps & Features“" "zum sauberen Deinstallieren"; Pct 92
+  Row unin ok "Eintrag in »Apps & Features«" "zum sauberen Deinstallieren"; Pct 92
   Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ps1`" -MiniPC $host2"
   Pct 100 "Windows-Teil fertig"
   $sync.Done = "windows"; Ping
@@ -844,7 +844,7 @@ function GeheZu($n) {
       Seite "PgStick"; $d = $sync.Choice.DiskInfo
       if ($sync.Choice.Mode -eq "neu") {
         $ui.StickTitle.Text = "Neuen Stick erstellen"; $ui.StickSub.Text = "Lege die Zugangsdaten für den Mini-PC fest."
-        $ui.WarnBox.Visibility = "Visible"; $ui.WarnTitle.Text = ("Alles auf „{0}“ ({1:N1} GB) wird gelöscht" -f $d.Name, ($d.Size / 1GB)); $ui.CbConfirm.IsChecked = $false
+        $ui.WarnBox.Visibility = "Visible"; $ui.WarnTitle.Text = ("Alles auf »{0}« ({1:N1} GB) wird gelöscht" -f $d.Name, ($d.Size / 1GB)); $ui.CbConfirm.IsChecked = $false
       } else {
         $ui.StickTitle.Text = "Stick abgleichen – $($d.Name) ($($d.Letter))"
         $ui.StickSub.Text = "Auf dem Stick: $($d.Version) · neueste: $($sync.Latest). Das Passwort wird nach jeder Installation vom Stick gelöscht – bitte neu eingeben."
@@ -867,7 +867,7 @@ $ui.BtnNext.Add_Click({
       $sel = $ui.DiskList.SelectedItem
       if (-not $sel) { Fehler "Bitte einen USB-Stick auswählen."; return }
       $d = $sel.Tag
-      if ($ui.RbHave.IsChecked -and -not $d.Butchies) { Fehler "Auf diesem Stick ist kein Butchies-Stick – wähle „Nein – neuen Stick erstellen“."; return }
+      if ($ui.RbHave.IsChecked -and -not $d.Butchies) { Fehler "Auf diesem Stick ist kein Butchies-Stick – wähle »Nein – neuen Stick erstellen«."; return }
       $sync.Choice.Mode = if ($ui.RbHave.IsChecked) { "abgleich" } else { "neu" }
       $sync.Choice.Disk = $d.Number; $sync.Choice.DiskInfo = $d; $sync.Choice.Letter = $d.Letter
       GeheZu 4
@@ -939,7 +939,7 @@ $timer.Add_Tick({
     ZeichneZeilen
     if ($sync.Percent -ge 0) { $ui.BigPct.Text = "$($sync.Percent) %"; $ui.BigText.Text = $sync.PercentText; SetBlocks $ui.Blocks $sync.Percent }
   }
-  if ($sync.Error) { Fehler ("Fehler: " + $sync.Error + "  – „Zurück“ und erneut versuchen, oder „Protokoll“ ansehen."); $ui.BtnBack.IsEnabled = $true }
+  if ($sync.Error) { Fehler ("Fehler: " + $sync.Error + "  – »Zurück« und erneut versuchen, oder »Protokoll« ansehen."); $ui.BtnBack.IsEnabled = $true }
   switch ($sync.Done) {
     "start" {
       $sync.Done = ""
@@ -948,7 +948,7 @@ $timer.Add_Tick({
       else { $ui.WelcomeInfo.Text = "GitHub gerade nicht erreichbar – Offline-Modus mit gespeicherten Dateien" }
     }
     "system-ok" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 2 } }
-    "system-fail" { $sync.Done = ""; Fehler "Bitte die rot markierten Punkte beheben und mit „Zurück“ erneut prüfen." }
+    "system-fail" { $sync.Done = ""; Fehler "Bitte die rot markierten Punkte beheben und mit »Zurück« erneut prüfen." }
     "payload" { $sync.Done = ""; if ($sync.ExtractDir) { Starte "windows" } }
     "windows" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 3 } }
     "scan" { $sync.Done = ""; ZeigeDisks }
