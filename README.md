@@ -8,9 +8,7 @@ Taskleisten-Programm für Windows und Erweiterungen (Bilder verstehen, Sprache, 
 - **Standardmodell:** Qwen3-Coder 30B-A3B (Q4_K_M), weitere im Modell-Manager oder per Hugging-Face-Link
 - **System:** Ubuntu Server 24.04 LTS (autoinstall)
 
-**Einfachster Weg:** `windows\Setup.bat` starten (oder `Butchies-KI-Setup.exe` aus *Actions → Setup.exe bauen*). Der Assistent richtet Windows ein, fragt nach deinem USB-Stick und der gewünschten KI und baut den Stick – immer mit den neuesten Dateien.
-
-**Download (komplettes Paket):** [download/butchies-ki-studio-0.4.0.zip](download/butchies-ki-studio-0.4.0.zip)
+**Download:** [Butchies-KI-Setup.exe](download/Butchies-KI-Setup.exe) – eine Datei, alles drin. Doppelklicken, der Assistent richtet Windows ein, fragt nach USB-Stick und KI und baut den Stick (holt dabei immer die neuesten Dateien; ohne Internet nimmt er das eingebaute Paket).
 
 Schritt-für-Schritt-Anleitung: **Anleitung.pdf** (mit Bildern) bzw. **[ANLEITUNG.md](ANLEITUNG.md)**.
 
