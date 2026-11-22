@@ -8,6 +8,8 @@ Taskleisten-Programm für Windows und Erweiterungen (Bilder verstehen, Sprache, 
 - **Standardmodell:** Qwen3-Coder 30B-A3B (Q4_K_M), weitere im Modell-Manager oder per Hugging-Face-Link
 - **System:** Ubuntu Server 24.04 LTS (autoinstall)
 
+**Download (komplettes Paket):** [download/butchies-ki-studio-0.3.1.zip](download/butchies-ki-studio-0.3.1.zip) – entpacken, dann `windows\Stick-Bauer.bat` starten.
+
 Schritt-für-Schritt-Anleitung: **Anleitung.pdf** (mit Bildern) bzw. **[ANLEITUNG.md](ANLEITUNG.md)**.
 
 Version: 0.3.1 – nicht auf echter Hardware getestet.
