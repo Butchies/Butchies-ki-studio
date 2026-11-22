@@ -1,0 +1,28 @@
+name: Setup.exe bauen
+
+on:
+  push:
+    branches: [main]
+    paths: ["windows/**", ".github/workflows/setup-exe.yml"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ps2exe installieren
+        shell: powershell
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module ps2exe -Scope CurrentUser -Force
+      - name: Butchies-KI-Setup.exe erstellen
+        shell: powershell
+        run: |
+          Import-Module ps2exe
+          Invoke-ps2exe -inputFile windows\Setup.ps1 -outputFile Butchies-KI-Setup.exe -noConsole -requireAdmin `
+            -title "Butchies KI Studio Setup" -product "Butchies KI Studio" -company "Butchies" -version "0.4.0.0"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Butchies-KI-Setup
+          path: Butchies-KI-Setup.exe

@@ -41,6 +41,23 @@ cat > "$T/etc/butchies-ki/config.json" <<EOF
 EOF
 chmod 600 "$T/etc/butchies-ki/config.json"
 
+# Im Installer gewählte KI-Modelle und Erweiterungen (lädt der Mini-PC bei der Ersteinrichtung)
+BKI_MODELS="${BKI_MODELS:-}" BKI_CUSTOM_MODELS="${BKI_CUSTOM_MODELS:-}" BKI_EXTENSIONS="${BKI_EXTENSIONS:-}" python3 - <<'PY' > "$T/etc/butchies-ki/models-wanted.json"
+import json, os
+s = lambda k, sep: [x for x in os.environ.get(k, "").replace(",", " ").split() if x]
+print(json.dumps({"models": s("BKI_MODELS", ","), "custom": s("BKI_CUSTOM_MODELS", " "), "extensions": s("BKI_EXTENSIONS", ",")}))
+PY
+
+# Modelle, die schon auf dem Stick liegen (zweiter Bereich "BKIMODELLE"), direkt übernehmen
+if [ -e /dev/disk/by-label/BKIMODELLE ]; then
+  status 88 "Kopiere KI-Modelle vom Stick auf die SSD …"
+  mkdir -p /mnt/bkimodelle "$T/var/lib/butchies-ki/models"
+  if mount -o ro /dev/disk/by-label/BKIMODELLE /mnt/bkimodelle; then
+    cp -v /mnt/bkimodelle/models/*.gguf /mnt/bkimodelle/models/*.gguf.json "$T/var/lib/butchies-ki/models/" 2>/dev/null || true
+    umount /mnt/bkimodelle
+  fi
+fi
+
 status 90 "Richte Dienste ein (Oberfläche, Wake-on-LAN, Nacht-Updates) …"
 in_target systemctl enable butchies-ki.service butchies-wol.service butchies-nightly.timer avahi-daemon.service ssh.service || true
 

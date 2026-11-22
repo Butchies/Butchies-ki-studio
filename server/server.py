@@ -38,7 +38,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.3.1"
+VERSION = "0.4.0"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -627,13 +627,47 @@ def model_meta(fn):
         return {}
 
 
+def wanted_setup():
+    """Was im Installer ausgewählt wurde (models-wanted.json), sonst das Standardmodell."""
+    try:
+        with open(os.path.join(ETC_DIR, "models-wanted.json"), encoding="utf-8") as f:
+            w = json.load(f)
+    except (OSError, ValueError):
+        w = {}
+    models = [m for m in w.get("models", []) if catalog_entry(m)]
+    if not models and not w.get("custom"):
+        models = [next(m for m in CATALOG if m.get("default"))["id"]]
+    return models, [u for u in w.get("custom", []) if parse_hf_url(u)], [e for e in w.get("extensions", []) if e in INSTALLERS]
+
+
 def first_setup():
-    """Ersteinrichtung nach der Installation: Laufzeit + Standardmodell."""
+    """Ersteinrichtung: Laufzeit, gewählte Modelle (fehlende laden) und Erweiterungen."""
     if not llama_binary():
         install_llama(0, 8)
-    if not installed_models():
-        default = next(m for m in CATALOG if m.get("default"))
-        download_model(default["id"], 8, 99, activate=True)
+    models, custom, exts = wanted_setup()
+    have = {m["id"] for m in installed_models()} | {m["file"] for m in installed_models()}
+    todo = [m for m in models if m not in have] + [u for u in custom if os.path.basename(parse_hf_url(u)[2]) not in have]
+    n = max(1, len(todo))
+    for i, item in enumerate(todo):
+        a, b = 8 + 80 * i / n, 8 + 80 * (i + 1) / n
+        if item.startswith("https://"):
+            download_custom(item)
+        else:
+            download_model(item, a, b, activate=(i == 0 and not CONFIG.get("active_model")))
+    if not CONFIG.get("active_model") and installed_models():
+        CONFIG["active_model"] = installed_models()[0]["file"]
+        save_config(CONFIG)
+    for e in exts:
+        if not ext_installed(e):
+            JOB.progress(90, "Erweiterung: " + e)
+            try:
+                INSTALLERS[e]()
+            except Exception as ex:  # noqa: BLE001
+                log("Erweiterung %s fehlgeschlagen: %s" % (e, ex))
+    try:
+        os.rename(os.path.join(ETC_DIR, "models-wanted.json"), os.path.join(ETC_DIR, "models-wanted.done.json"))
+    except OSError:
+        pass
     LLAMA.restart()
 
 
@@ -1177,8 +1211,44 @@ def github_headers(raw=False):
     return h
 
 
+CATALOG_CACHE = os.path.join(DATA_DIR, "modelle.json")
+
+
+def apply_catalog(data):
+    models = [m for m in data.get("models", []) if m.get("id") and m.get("repo") and m.get("pattern")]
+    if models:
+        CATALOG[:] = models
+    exts = {e["id"]: e for e in data.get("extensions", []) if e.get("id")}
+    for e in EXTENSIONS:
+        if e["id"] in exts:
+            e.update({k: v for k, v in exts[e["id"]].items() if k in ("size_gb", "desc")})
+
+
+def load_catalog_cache():
+    try:
+        with open(CATALOG_CACHE, encoding="utf-8") as f:
+            apply_catalog(json.load(f))
+    except (OSError, ValueError):
+        pass
+
+
+def refresh_catalog():
+    repo = CONFIG.get("update_repo") or "Butchies/Butchies-ki-studio"
+    req = urllib.request.Request("https://api.github.com/repos/%s/contents/modelle.json" % repo, headers=github_headers(True))
+    with urllib.request.urlopen(req, timeout=20) as r:
+        data = json.loads(r.read().decode("utf-8"))
+    apply_catalog(data)
+    with open(CATALOG_CACHE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    log("Modell-Katalog aktualisiert (%d Modelle)" % len(CATALOG))
+
+
 def check_updates():
     err = []
+    try:
+        refresh_catalog()
+    except Exception as e:  # noqa: BLE001
+        err.append("Modell-Katalog: %s" % e)
     try:
         UPDATE_INFO["llama_latest"] = http_json("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest").get("tag_name", "")
     except Exception as e:  # noqa: BLE001
@@ -1211,7 +1281,7 @@ def updates_available():
 
 
 def update_check_thread():
-    time.sleep(120)
+    time.sleep(20)
     while True:
         try:
             check_updates()
@@ -1763,6 +1833,7 @@ def main():
     enable_wol()
     threading.Thread(target=LLAMA.watch, daemon=True).start()
     threading.Thread(target=VISION.watch, daemon=True).start()
+    load_catalog_cache()
     threading.Thread(target=update_check_thread, daemon=True).start()
     if ext_installed("vision"):
         VISION.start()

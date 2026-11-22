@@ -2,7 +2,7 @@
 
 Offline-KI fürs Programmieren auf deinem Mini-PC, bedient komplett aus der Ferne über den Browser.
 
-> **Stand 0.3.1 – noch nicht auf echter Hardware getestet.**
+> **Stand 0.4.0 – noch nicht auf echter Hardware getestet.**
 > Server, Oberfläche, Statusseite und Passwort-Vorbereitung wurden in einer Testumgebung geprüft.
 > USB-Stick, Ubuntu-Installation, Ruhezustand und Wake-on-LAN laufen zum ersten Mal auf deinem Mini-PC.
 
@@ -27,7 +27,19 @@ windows/     Stick-Bauer und Taskleisten-Programm für deinen Windows-PC
 
 ---
 
-## 1. Stick bauen (am Windows-PC)
+## 1. Setup-Assistent (am Windows-PC) – empfohlen
+
+`windows\Setup.bat` doppelklicken (oder `Butchies-KI-Setup.exe`). Der Assistent führt durch 9 Schritte:
+Systemprüfung → Windows-Teil (Taskleiste, Verknüpfungen, Deinstallations-Eintrag) → USB-Stick (vorhandenen abgleichen
+oder neuen erstellen) → **KI-Auswahl** (Liste wird live von GitHub/Hugging Face geholt; Modelle wahlweise gleich auf den
+Stick, dann komplett offline, Stick ab 32 GB) → Zugangsdaten → Online-Prüfung → Stick erstellen (mit Stick-Test und
+Abschlussprüfung) → Fertig (Installation des Mini-PCs live mitverfolgen).
+
+Der **KI-Autopilot** oben rechts erledigt alles, was keine Entscheidung braucht, selbst – Schalter aus = alles von Hand.
+Ein Stick wird **nur** gelöscht, wenn du den Haken „Ich habe verstanden“ setzt.
+Einmal geladene Dateien werden gemerkt (Offline-Modus für weitere Sticks).
+
+## 1b. Stick bauen ohne Assistent (Alternative)
 
 1. Paket **komplett** entpacken (alle drei Ordner müssen nebeneinander liegen).
 2. USB-Stick einstecken.
