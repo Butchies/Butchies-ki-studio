@@ -12,7 +12,7 @@ param([switch]$Elevated)
 
 $ErrorActionPreference = "Stop"
 $Repo = "Butchies/Butchies-ki-studio"
-$SetupVersion = "0.4.3"
+$SetupVersion = "0.4.4"
 # Komplettes Paket (installer, server, Taskleiste) – wird beim Bauen der EXE eingefügt
 $EmbeddedPayload = "__PAYLOAD__"
 
@@ -55,11 +55,11 @@ $http.DefaultRequestHeaders.UserAgent.ParseAdd("ButchiesKISetup/$($sync.SetupVer
 
 function Ping { $sync.Ver++ }
 function Log($t) { [void]$sync.Log.Add((Get-Date -Format "HH:mm:ss ") + $t); Ping }
-function Row($key, $state, $title, $sub = "", $right = "") {
+function Row($key, $state, $title, $sub = "", $right = "", $action = "") {
   $r = $null
   foreach ($x in $sync.Rows) { if ($x.Key -eq $key) { $r = $x } }
   if (-not $r) { $r = @{ Key = $key }; [void]$sync.Rows.Add($r) }
-  $r.State = $state; $r.Title = $title; $r.Sub = $sub; $r.Right = $right; Ping
+  $r.State = $state; $r.Title = $title; $r.Sub = $sub; $r.Right = $right; $r.Action = $action; Ping
 }
 function Pct($p, $t) { $sync.Percent = [int][Math]::Max(0, [Math]::Min(100, $p)); if ($t) { $sync.PercentText = $t }; Ping }
 function Versuch($name, [scriptblock]$sb) {
@@ -151,7 +151,7 @@ switch ($task) {
   if ($free -ge 5GB) { Row disk ok "Freier Speicherplatz" "mind. 5 GB für Downloads" ("{0:N0} GB frei" -f ($free / 1GB)) }
   else { Row disk bad "Freier Speicherplatz" "mind. 5 GB nötig auf $($drive):" ("{0:N1} GB frei" -f ($free / 1GB)); $ok = $false }
   $amd = Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | Where-Object { $_.Name -match "AMD|Radeon" } | Select-Object -First 1
-  if ($amd) { Row gpu info "AMD-Grafiktreiber" "optional – nur für den späteren Turbo-Modus" "$($amd.Name) · $($amd.DriverVersion)" }
+  if ($amd) { Row gpu info "AMD-Grafiktreiber" "optional – nur für den späteren Turbo-Modus" "$($amd.Name) · $($amd.DriverVersion)" "amd" }
   else { Row gpu info "AMD-Grafiktreiber" "optional – nur für den späteren Turbo-Modus" "nicht nötig" }
   $sync.Done = if ($ok) { "system-ok" } else { "system-fail" }; Ping
 }
@@ -735,15 +735,19 @@ function ZeichneZeilen {
       $sp = New-Object Windows.Controls.StackPanel
       $t1 = New-Object Windows.Controls.TextBlock; $t2 = New-Object Windows.Controls.TextBlock; $t2.Foreground = Brush "#5C5C5C"; $t2.FontSize = 12; $t2.TextTrimming = "CharacterEllipsis"
       [void]$sp.Children.Add($t1); [void]$sp.Children.Add($t2)
-      [void]$dp.Children.Add($icon); [void]$dp.Children.Add($right); [void]$dp.Children.Add($sp)
+      $act = New-Object Windows.Controls.Button; $act.Style = $w.Resources["Btn"]; $act.MinWidth = 0; $act.Height = 28; $act.Margin = "10,0,0,0"; $act.Visibility = "Collapsed"
+      [Windows.Controls.DockPanel]::SetDock($act, "Right")
+      $act.Add_Click({ param($sender, $e) StarteAktion $sender.Tag })
+      [void]$dp.Children.Add($icon); [void]$dp.Children.Add($act); [void]$dp.Children.Add($right); [void]$dp.Children.Add($sp)
       $card.Child = $dp
       $tt = New-Object Windows.Media.TranslateTransform 0, 10; $card.RenderTransform = $tt; $card.Opacity = 0
       [void]$ui.Rows.Children.Add($card)
       $card.BeginAnimation([Windows.UIElement]::OpacityProperty, (New-Object Windows.Media.Animation.DoubleAnimation(0, 1, [TimeSpan]::FromMilliseconds(400))))
       $tt.BeginAnimation([Windows.Media.TranslateTransform]::YProperty, (New-Object Windows.Media.Animation.DoubleAnimation(10, 0, [TimeSpan]::FromMilliseconds(400))))
-      $script:rowCache[$key] = @{ Icon = $icon; T1 = $t1; T2 = $t2; Right = $right; State = "" }
+      $script:rowCache[$key] = @{ Icon = $icon; T1 = $t1; T2 = $t2; Right = $right; State = ""; Act = $act }
     }
     $c = $script:rowCache[$key]
+    if ($r.Action) { $c.Act.Tag = $r.Action; $c.Act.Content = "Aktualisieren"; $c.Act.Visibility = "Visible" } else { $c.Act.Visibility = "Collapsed" }
     $c.T1.Text = $r.Title; $c.T2.Text = $r.Sub; $c.T2.Visibility = if ($r.Sub) { "Visible" } else { "Collapsed" }; $c.Right.Text = $r.Right
     if ($c.State -ne $r.State) {
       $c.State = $r.State; $c.Icon.Children.Clear()
@@ -767,6 +771,21 @@ function ZeichneZeilen {
         "bad" { $t = New-Object Windows.Controls.TextBlock; $t.Text = [string][char]0x2715; $t.FontWeight = "Bold"; $t.Foreground = Brush "#C42B1C"; $t.HorizontalAlignment = "Center"; [void]$c.Icon.Children.Add($t) }
         default { $e = New-Object Windows.Shapes.Ellipse; $e.Width = 16; $e.Height = 16; $e.Stroke = Brush "#C4C4C4"; $e.StrokeThickness = 2; [void]$c.Icon.Children.Add($e) }
       }
+    }
+  }
+}
+
+# --- Aktionen aus Zeilen (z. B. AMD-Treiber aktualisieren) -------------------------
+function StarteAktion($name) {
+  if ($name -eq "amd") {
+    $cands = @("$env:ProgramFiles\AMD\CNext\CNext\RadeonSoftware.exe", "$env:ProgramFiles\AMD\CNext\CNext\AMDRSServ.exe")
+    $exe = $cands | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($exe) {
+      Start-Process $exe -ArgumentList "-update" -ErrorAction SilentlyContinue
+      [Windows.MessageBox]::Show("AMD Software: Adrenalin wurde geöffnet.`nDort oben rechts auf »Nach Updates suchen« klicken und das empfohlene Update installieren.`n`nDanach hier mit »Zurück« → »Weiter« neu prüfen.", "AMD-Treiber aktualisieren") | Out-Null
+    } else {
+      Start-Process "https://www.amd.com/de/support/download/drivers.html"
+      [Windows.MessageBox]::Show("AMD Software ist nicht installiert.`nIch habe die AMD-Treiberseite geöffnet: dort »Automatisch erkennen und installieren« herunterladen und ausführen.", "AMD-Treiber aktualisieren") | Out-Null
     }
   }
 }
