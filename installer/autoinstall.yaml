@@ -4,9 +4,8 @@
 # Diese Datei liegt im Hauptverzeichnis des USB-Sticks. Der Stick-Bauer setzt
 # in grub.cfg den Startparameter "autoinstall", dadurch läuft alles ohne Fragen.
 #
-# WICHTIG: __DISK__ und __PWHASH__ werden erst auf dem Mini-PC von early.sh
-# ersetzt – und nur dann, wenn genau EINE eingebaute SSD vorhanden und diese
-# komplett leer ist. Sonst bricht die Installation ab, bevor etwas gelöscht wird.
+# WICHTIG: __DISK__ und __PWHASH__ werden erst auf dem Mini-PC von early.sh ersetzt.
+# Die größte eingebaute SSD wird IMMER gelöscht (außer Butchies KI ist dort schon installiert).
 autoinstall:
   version: 1
   interactive-sections: []
@@ -63,6 +62,9 @@ autoinstall:
 
   early-commands:
     - bash /cdrom/butchies/installer/early.sh
+
+  error-commands:
+    - bash /cdrom/butchies/installer/error.sh
 
   late-commands:
     - bash /cdrom/butchies/installer/late.sh

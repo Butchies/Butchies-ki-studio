@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 NAME = "butchies-ki-setup.local"
 PORT = 80
 
-STATE = {"percent": 0, "text": "Installation wird vorbereitet …", "state": "running",
+STATE = {"disk": "", "diskinfo": "", "percent": 0, "text": "Installation wird vorbereitet …", "state": "running",
          "log": [], "started": time.time()}
 LOCK = threading.Lock()
 
@@ -46,9 +46,13 @@ def add_log(text):
         STATE["log"] = STATE["log"][-200:]
 
 
-def set_progress(percent=None, text=None, state=None):
+def set_progress(percent=None, text=None, state=None, disk=None, diskinfo=None):
     with LOCK:
-        if percent is not None and (state == "fehler" or percent >= STATE["percent"]):
+        if disk is not None:
+            STATE["disk"] = disk
+        if diskinfo is not None:
+            STATE["diskinfo"] = diskinfo
+        if percent is not None and (state in ("fehler", "bestaetigen") or percent >= STATE["percent"]):
             STATE["percent"] = max(0, min(100, int(percent)))
         if text:
             STATE["text"] = text
@@ -70,7 +74,7 @@ h1{margin:0 0 4px;font-size:24px;font-weight:600}.muted{color:var(--sub)}
 .pct{font-size:46px;font-weight:600;color:var(--acc);margin:18px 0 8px}
 .blocks{display:grid;grid-template-columns:repeat(20,1fr);gap:4px;height:14px}
 .blocks span{background:var(--track);border-radius:2px}.blocks span.on{background:var(--acc)}
-.fehler .pct{color:var(--bad)}.fehler .blocks span.on{background:var(--bad)}.fertig .pct{color:var(--ok)}.fertig .blocks span.on{background:var(--ok)}
+.fehler .pct{color:var(--bad)}.fehler .blocks span.on{background:var(--bad)}.bestaetigen .pct{color:var(--bad)}.fertig .pct{color:var(--ok)}.fertig .blocks span.on{background:var(--ok)}
 #text{margin:14px 0;font-size:16px}
 pre{background:var(--code);border-radius:6px;padding:12px;font:12px/1.5 Consolas,monospace;color:var(--sub);max-height:300px;overflow:auto;white-space:pre-wrap}
 </style></head><body><div class="card" id="card">
@@ -80,6 +84,11 @@ pre{background:var(--code);border-radius:6px;padding:12px;font:12px/1.5 Consolas
 <div class="pct" id="pct">0 %</div>
 <div class="blocks" id="blocks" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
 <div id="text"></div><div class="muted" id="time"></div>
+<div id="confirm" style="display:none;margin:14px 0;padding:14px;border-radius:8px;background:#fde7e9;border:1px solid #f1bbbc;color:#1a1a1a">
+<b>Achtung: Alles auf dieser SSD wird gelöscht.</b>
+<pre id="dinfo" style="background:#fff;color:#1a1a1a"></pre>
+<label style="display:flex;gap:8px;align-items:center;margin:8px 0"><input type="checkbox" id="cb"> Ja, das ist die SSD im Mini-PC – löschen und installieren</label>
+<button id="go" style="height:36px;padding:0 16px;border-radius:4px;border:0;background:#c42b1c;color:#fff;font-weight:600;cursor:pointer">SSD löschen und installieren</button></div>
 <details><summary class="muted">Protokoll</summary><pre id="log"></pre></details>
 </div><script>
 const b=document.getElementById("blocks");for(let i=0;i<20;i++)b.appendChild(document.createElement("span"));
@@ -90,9 +99,14 @@ b.setAttribute("aria-valuenow",s.percent);
 document.getElementById("text").textContent=s.text;
 document.getElementById("card").className="card "+s.state;
 document.getElementById("time").textContent="Läuft seit "+Math.floor(s.elapsed/60)+" Min.";
-document.getElementById("log").textContent=s.log.join("\\n");}catch(e){
+document.getElementById("log").textContent=s.log.join("\\n");
+const cf=document.getElementById("confirm");cf.style.display=s.state==="bestaetigen"?"block":"none";
+if(s.state==="bestaetigen"){document.getElementById("dinfo").textContent=s.diskinfo;window._disk=s.disk;}}catch(e){
 document.getElementById("text").textContent="Mini-PC startet neu … gleich unter http://BKI_HOST.local erreichbar.";}}
 tick();setInterval(tick,2000);
+document.getElementById("go").onclick=async()=>{if(!document.getElementById("cb").checked){alert("Bitte zuerst den Haken setzen.");return;}
+const r=await fetch("/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({disk:window._disk})});
+if(!r.ok)alert("Bestätigung nicht angenommen – Seite neu laden.");};
 </script></body></html>"""
 
 
@@ -133,7 +147,16 @@ class Handler(BaseHTTPRequestHandler):
         except ValueError:
             data = {}
         if self.path.startswith("/butchies"):
-            set_progress(data.get("percent"), data.get("text"), data.get("state"))
+            set_progress(data.get("percent"), data.get("text"), data.get("state"), data.get("disk"), data.get("diskinfo"))
+        elif self.path.startswith("/confirm"):
+            d = str(data.get("disk", ""))
+            with LOCK:
+                ok = STATE.get("state") == "bestaetigen" and d and d == STATE.get("disk")
+            if ok:
+                with open("/tmp/butchies-confirm", "w") as f:
+                    f.write(d)
+                set_progress(3, "Löschen bestätigt – Installation startet", "running")
+            return self.send(200 if ok else 409, "application/json", json.dumps({"ok": bool(ok)}).encode())
         elif self.path.startswith("/event"):
             handle_event(data)
         self.send(200, "application/json", b'{"ok":true}')

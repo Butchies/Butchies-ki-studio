@@ -63,9 +63,9 @@ Hast du die Ubuntu-ISO schon? Dann in PowerShell (als Admin):
 4. Am Ende startet der Mini-PC neu. Der Stick **darf stecken bleiben** – die Startreihenfolge
    wird automatisch auf die SSD gestellt.
 
-**Sicherheit („nur leere SSD“):** Der Stick installiert nur, wenn **genau ein** eingebautes Laufwerk
-da ist und dieses **komplett leer** ist. Steckt er aus Versehen in deinem Haupt-PC, bricht er ab,
-löscht nichts und schaltet den Rechner nach 10 Minuten aus.
+**ACHTUNG:** Der Stick löscht beim Start **immer** die (größte) eingebaute SSD – egal ob leer oder mit Daten.
+Nur im Mini-PC benutzen, nie in einem anderen PC starten! Ausnahme: Ist Butchies KI dort schon installiert,
+startet er einfach von der SSD.
 Nach der Installation wird dein Passwort automatisch vom Stick gelöscht; das Protokoll liegt dann
 im Ordner `butchies-protokoll` auf dem Stick.
 

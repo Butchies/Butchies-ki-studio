@@ -2,7 +2,7 @@
 # Butchies KI Studio – Sicherheitsprüfung VOR der Installation.
 # Läuft im Live-System des Sticks. Es wird hier noch NICHTS gelöscht.
 #
-# Regeln ("Nur leere SSD"):
+# Regeln (gewünscht: immer installieren):
 #   * Genau eine eingebaute Festplatte/SSD (USB-Laufwerke zählen nicht)
 #   * Diese ist komplett leer (keine Partitionen, keine Signaturen)
 #     -> Installation geht los
@@ -29,6 +29,7 @@ PY
 
 abort() {
   echo "ABBRUCH: $1"
+  if mount -o remount,rw /cdrom 2>/dev/null; then mkdir -p /cdrom/butchies-protokoll; cp /tmp/butchies-*.log /cdrom/butchies-protokoll/ 2>/dev/null; lsblk -o NAME,SIZE,TYPE,TRAN,FSTYPE,LABEL > /cdrom/butchies-protokoll/laufwerke.txt 2>&1; sync; mount -o remount,ro /cdrom 2>/dev/null; fi
   status 0 "Abbruch: $1 – es wurde nichts gelöscht. Der Rechner schaltet sich in 10 Minuten aus." fehler
   sleep 600
   poweroff -f
@@ -66,9 +67,13 @@ done < <(lsblk -dnro NAME,TYPE,TRAN)
 echo "Eingebaute Laufwerke: ${INTERNAL[*]:-keine}"
 
 [ "${#INTERNAL[@]}" -ge 1 ] || abort "Keine eingebaute SSD gefunden (ist die M.2 richtig eingesteckt?)"
-[ "${#INTERNAL[@]}" -eq 1 ] || abort "Mehr als ein eingebautes Laufwerk gefunden (${INTERNAL[*]}) – zur Sicherheit wird nicht installiert"
-
-D="/dev/${INTERNAL[0]}"
+# Mehrere eingebaute Laufwerke: das größte nehmen
+BEST=""; BESTSIZE=0
+for N in "${INTERNAL[@]}"; do
+  SZ=$(lsblk -bdno SIZE "/dev/$N" 2>/dev/null || echo 0)
+  if [ "${SZ:-0}" -gt "$BESTSIZE" ]; then BEST="$N"; BESTSIZE="$SZ"; fi
+done
+D="/dev/$BEST"
 PARTS=$(lsblk -nro NAME "$D" | tail -n +2 | wc -l)
 SIG=$(wipefs -n "$D" 2>/dev/null | tail -n +2 | wc -l)
 echo "$D: Partitionen=$PARTS Signaturen=$SIG"
@@ -96,7 +101,16 @@ if [ "$PARTS" -gt 0 ] || [ "$SIG" -gt 0 ]; then
     reboot -f
     sleep 30
   fi
-  abort "Die SSD $D ist nicht leer – das ist wohl nicht der Mini-PC"
+  # Nicht leer und keine Butchies-Installation: wird gelöscht (gewünscht: immer installieren)
+  lsblk -o NAME,SIZE,FSTYPE,LABEL "$D"; wipefs -n "$D" 2>/dev/null
+  status 2 "Lösche SSD $D – vorhandene Daten werden überschrieben …"
+  for P in $(lsblk -nro NAME "$D" | tail -n +2 | tac); do umount "/dev/$P" 2>/dev/null; wipefs -a "/dev/$P" >/dev/null 2>&1; done
+  wipefs -a "$D" >/dev/null 2>&1
+  sgdisk --zap-all "$D" >/dev/null 2>&1 || true
+  dd if=/dev/zero of="$D" bs=1M count=32 conv=fsync status=none || true
+  partprobe "$D" 2>/dev/null || true
+  sleep 2
+  echo "SSD $D geleert"
 fi
 
 # --- Leere SSD: Platzhalter in der Installationsdatei ersetzen ------------
