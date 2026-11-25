@@ -2017,6 +2017,17 @@ class Handler(BaseHTTPRequestHandler):
                                [(c,t,ts,c,t) for c,t,ts in rows])
                 count = db.total_changes
             return self.send_json({"ok": True, "imported": count})
+        if path == "/api/knowledge/usage":
+            from contextlib import closing
+            with closing(knowledge_db()) as db:
+                count, chars = db.execute("SELECT count(*),coalesce(sum(length(content)),0) FROM memories").fetchone()
+                categories = db.execute("SELECT category,count(*) FROM memories GROUP BY category ORDER BY category").fetchall()
+                size = db.execute("PRAGMA page_count").fetchone()[0] * db.execute("PRAGMA page_size").fetchone()[0]
+            folder = os.path.join(DATA_DIR,"knowledge","backups")
+            backup_bytes = sum(os.path.getsize(os.path.join(folder,n)) for n in os.listdir(folder)
+                               if n.startswith("knowledge-") and n.endswith(".sqlite3") and os.path.isfile(os.path.join(folder,n))) if os.path.isdir(folder) else 0
+            return self.send_json({"ok": True, "entries": count, "characters": chars, "database_bytes": size,
+                                   "backup_bytes": backup_bytes, "categories": dict(categories)})
         if path == "/api/knowledge/backups":
             folder = os.path.join(DATA_DIR, "knowledge", "backups")
             names = sorted((n for n in os.listdir(folder) if n.startswith("knowledge-") and n.endswith(".sqlite3")), reverse=True) if os.path.isdir(folder) else []
