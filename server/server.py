@@ -562,6 +562,7 @@ def storage_verified_copy(uid):
                 raise RuntimeError("Prüfsummenabweichung: " + src)
             copied += 1
             JOB.progress(100 * copied / max(1, plan["files"]), "Datei geprüft: " + name)
+            migration_status("running", uuid=uid, percent=int(99 * copied / max(1, plan["files"])), files_done=copied, files_total=plan["files"])
     log("Verifizierte Dateikopie erstellt; Quelle unverändert: " + target)
     return plan
 
@@ -1663,6 +1664,14 @@ class Handler(BaseHTTPRequestHandler):
                 "ext": {e["id"]: ext_installed(e["id"]) for e in EXTENSIONS},
                 "vision": VISION.state,
             })
+        if path == "/api/storage/migration-status":
+            try:
+                with open(os.path.join(ETC_DIR, "storage-migration.json"), encoding="utf-8") as f:
+                    return self.send_json({"ok": True, "migration": json.load(f)})
+            except FileNotFoundError:
+                return self.send_json({"ok": True, "migration": {"state": "idle"}})
+            except (OSError, ValueError) as exc:
+                return self.error(str(exc), 503)
         if path == "/api/storage":
             try:
                 return self.send_json({"ok": True, "limit_percent": 90, "devices": storage_inventory(), "approved": CONFIG.get("approved_storage", {})})
@@ -2107,6 +2116,16 @@ def main():
     srv.serve_forever()
 
 
+def migration_status(state, **details):
+    path = os.path.join(ETC_DIR, "storage-migration.json")
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(dict(state=state, timestamp=time.time(), **details), f)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp, path)
+
+
 def offline_storage_migration(uid):
     if DRYRUN:
         raise RuntimeError("Speicherverlagerung im Testmodus gesperrt")
@@ -2116,8 +2135,14 @@ def offline_storage_migration(uid):
                                       "--property=ActiveState", "--value"], text=True, timeout=10).strip()
     if status != "inactive":
         raise RuntimeError("Serverdienst muss vollständig gestoppt sein")
-    plan = storage_verified_copy(uid)
-    storage_activate_verified(plan)
+    migration_status("running", uuid=uid, percent=0)
+    try:
+        plan = storage_verified_copy(uid)
+        storage_activate_verified(plan)
+        migration_status("completed", uuid=uid, percent=100, target=plan["target"])
+    except Exception as exc:
+        migration_status("failed", uuid=uid, error=str(exc))
+        raise
     print("Speicherumschaltung gespeichert. Originaldaten bleiben erhalten.", flush=True)
 
 
