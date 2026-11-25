@@ -73,12 +73,61 @@ $sync = [hashtable]::Synchronized(@{
   Remember = (Test-Path $pwFile); State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
+  TrayVersion = "0.4.13"; UpdateCache = (Join-Path $cfgDir "cache")
+  WindowsUpdate = $null; Updating = $false; UpdateNotice = ""
 })
 
 # --- Hintergrund-Thread: fragt den Mini-PC ab, führt Befehle aus ------------------
 $worker = {
   param($sync)
   $cookies = New-Object Net.CookieContainer
+
+  $githubDownload = "https://raw.githubusercontent.com/Butchies/Butchies-ki-studio/refs/heads/fix/0.4.8-studio-login/download"
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  $nextUpdateCheck = [datetime]::MinValue
+
+  function PruefeWindowsUpdate([bool]$manual) {
+    try {
+      $manifest = Invoke-RestMethod -UseBasicParsing -Uri "$githubDownload/update.json" -TimeoutSec 12 -ErrorAction Stop
+      if ($manifest.version -notmatch '^\d+\.\d+\.\d+$' -or $manifest.sha256 -notmatch '^[a-f0-9]{64}$') {
+        throw "Update-Metadaten ungültig."
+      }
+      if ([version]$manifest.version -gt [version]$sync.TrayVersion) {
+        $previous = $sync.WindowsUpdate
+        $sync.WindowsUpdate = $manifest
+        if ($manual -or -not $previous -or $previous.version -ne $manifest.version) {
+          $sync.UpdateNotice = "Windows-Update $($manifest.version) verfügbar. Im Taskleistenmenü kannst du es installieren."
+        }
+      } else {
+        $sync.WindowsUpdate = $null
+        if ($manual) { $sync.UpdateNotice = "Butchies KI für Windows ist aktuell ($($sync.TrayVersion))." }
+      }
+    } catch {
+      if ($manual) { $sync.UpdateNotice = "GitHub-Updateprüfung fehlgeschlagen: $($_.Exception.Message)" }
+    }
+  }
+
+  function InstalliereWindowsUpdate {
+    $manifest = $sync.WindowsUpdate
+    if (-not $manifest) { $sync.Updating = $false; return }
+    $part = $null
+    try {
+      New-Item -ItemType Directory -Force -Path $sync.UpdateCache -ErrorAction Stop | Out-Null
+      $setup = Join-Path $sync.UpdateCache ("Butchies-KI-Setup-" + $manifest.version + ".exe")
+      $part = "$setup.part"
+      Invoke-WebRequest -UseBasicParsing -Uri "$githubDownload/Butchies-KI-Setup.exe" -OutFile $part -TimeoutSec 90 -ErrorAction Stop
+      if ((Get-FileHash -Algorithm SHA256 -LiteralPath $part -ErrorAction Stop).Hash -ine $manifest.sha256) {
+        throw "Die Prüfsumme stimmt nicht. Bitte erneut nach Updates suchen."
+      }
+      Move-Item -LiteralPath $part -Destination $setup -Force -ErrorAction Stop
+      Start-Process -FilePath $setup -ErrorAction Stop
+    } catch {
+      $sync.UpdateNotice = "Windows-Update konnte nicht gestartet werden: $($_.Exception.Message)"
+    } finally {
+      if ($part -and (Test-Path -LiteralPath $part)) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+      $sync.Updating = $false
+    }
+  }
 
   function Anfrage($method, $path, $body, $ms) {
     $result = @{ Code = 0; Text = "" }
@@ -138,12 +187,21 @@ $worker = {
       switch -Regex ($cmd) {
         "^wake$" { Wecken }
         "^login$" { [void](Anmelden) }
+        "^update-check$" {
+          PruefeWindowsUpdate $true
+          $nextUpdateCheck = [datetime]::UtcNow.AddHours(1)
+        }
+        "^update-install$" { InstalliereWindowsUpdate }
         "^(sleep|reboot|shutdown)$" {
           $r = Anfrage "POST" "/api/system/$cmd" @{} 5000
           $sync.Message = if ($r.Code -eq 200) { @{ sleep = "Mini-PC wird schlafen gelegt."; reboot = "Mini-PC startet neu."; shutdown = "Mini-PC fährt herunter." }[$cmd] } else { "Befehl fehlgeschlagen (Code $($r.Code))." }
           if ($r.Code -eq 200 -and $cmd -ne "reboot") { $sync.State = "schlaeft"; $sync.Status = $null; $sync.Version++ }
         }
       }
+    }
+    if ([datetime]::UtcNow -ge $nextUpdateCheck) {
+      PruefeWindowsUpdate $false
+      $nextUpdateCheck = [datetime]::UtcNow.AddHours(1)
     }
     # Status abfragen (GET hält den Mini-PC nicht wach)
     $r = Anfrage "GET" "/api/status" $null 2500
@@ -571,9 +629,13 @@ $menu = New-Object Windows.Forms.ContextMenuStrip
 [void]$menu.Items.Add("Status anzeigen", $null, { ZeigeFenster })
 [void]$menu.Items.Add("Oberfläche öffnen", $null, { OeffneOberflaeche })
 [void]$menu.Items.Add("Linux-Konsole (SSH)", $null, { OeffneLinuxKonsole })
-[void]$menu.Items.Add("Windows-Update auf GitHub", $null, {
-  Start-Process "https://github.com/Butchies/Butchies-ki-studio/blob/fix/0.4.8-studio-login/download/Butchies-KI-Setup.exe"
+[void]$menu.Items.Add("GitHub-Updates prüfen", $null, { $sync.Queue.Enqueue("update-check") })
+$installUpdate = $menu.Items.Add("Windows-Update installieren", $null, {
+  if (-not $sync.WindowsUpdate -or $sync.Updating) { return }
+  $sync.Updating = $true
+  $sync.Queue.Enqueue("update-install")
 })
+$installUpdate.Enabled = $false
 [void]$menu.Items.Add("Mini-PC aufwecken", $null, { $sync.Queue.Enqueue("wake") })
 [void]$menu.Items.Add("-")
 [void]$menu.Items.Add("Beenden", $null, { Beenden })
@@ -594,6 +656,14 @@ $timer.add_Tick({
     FensterAktualisieren
     if ($sync.Mac -and ($sync.Mac -ne $cfg.mac -or $sync.Ip -ne $cfg.ip)) { $cfg.mac = $sync.Mac; $cfg.ip = $sync.Ip; Speichern }
     if ($sync.AcceptedPassword) { SpeicherePasswort $sync.AcceptedPassword; $sync.AcceptedPassword = "" }
+    $installUpdate.Enabled = [bool]$sync.WindowsUpdate -and -not $sync.Updating
+    $installUpdate.Text = if ($sync.Updating) { "Windows-Update wird geladen …" }
+      elseif ($sync.WindowsUpdate) { "Windows-Update $($sync.WindowsUpdate.version) installieren" }
+      else { "Windows-Update installieren" }
+    if ($sync.UpdateNotice) {
+      $tray.ShowBalloonTip(6500, "Butchies KI · GitHub", $sync.UpdateNotice, "Info")
+      $sync.UpdateNotice = ""
+    }
     if ($sync.Notify) { $tray.ShowBalloonTip(5000, "Butchies KI", $sync.Notify, "Info"); $sync.Notify = "" }
     if ($sync.Message -and -not $script:win) { $sync.Message = "" }
   }

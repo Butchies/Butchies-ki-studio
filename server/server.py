@@ -34,12 +34,13 @@ import tarfile
 import threading
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.12"
+VERSION = "0.4.13"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -1331,7 +1332,7 @@ UPDATE_INFO = {"checked": 0, "llama_latest": "", "app_latest": "", "error": ""}
 
 
 def github_headers(raw=False):
-    h = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github.raw" if raw else "application/vnd.github+json"}
+    h = {"User-Agent": USER_AGENT, "Accept": "application/vnd.github.raw+json" if raw else "application/vnd.github+json"}
     tok = CONFIG.get("github_token")
     if tok:
         h["Authorization"] = "Bearer " + tok
@@ -1388,10 +1389,19 @@ def check_updates():
     except Exception as e:  # noqa: BLE001
         err.append("llama.cpp: %s" % e)
     repo, ref = studio_update_source()
+    UPDATE_INFO["app_latest"] = ""
     try:
-        req = urllib.request.Request("https://api.github.com/repos/%s/contents/VERSION?ref=%s" % (repo, ref), headers=github_headers(True))
+        if repo.lower() == "butchies/butchies-ki-studio" and not CONFIG.get("github_token"):
+            url = "https://raw.githubusercontent.com/%s/refs/heads/%s/VERSION" % (repo, ref)
+        else:
+            query = urllib.parse.urlencode({"ref": ref})
+            url = "https://api.github.com/repos/%s/contents/VERSION?%s" % (repo, query)
+        req = urllib.request.Request(url, headers=github_headers(True))
         with urllib.request.urlopen(req, timeout=20) as r:
-            UPDATE_INFO["app_latest"] = r.read().decode().strip()
+            latest = r.read(80).decode().strip()
+            if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", latest):
+                raise ValueError("GitHub hat keine gültige VERSION geliefert")
+            UPDATE_INFO["app_latest"] = latest
     except Exception as e:  # noqa: BLE001
         err.append("Butchies KI Studio (%s): %s" % (repo, e))
     UPDATE_INFO["checked"] = time.time()
@@ -1421,7 +1431,7 @@ def update_check_thread():
             check_updates()
         except Exception as e:  # noqa: BLE001
             log("Update-Prüfung fehlgeschlagen: %s" % e)
-        time.sleep(24 * 3600)
+        time.sleep(3600)
 
 
 def update_app():

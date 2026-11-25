@@ -59,6 +59,13 @@ jobs:
           Copy-Item Butchies-KI-Setup.exe download\Butchies-KI-Setup.exe -Force
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add download/Butchies-KI-Setup.exe
-          git commit -m "Setup.exe automatisch gebaut" ; if ($LASTEXITCODE -eq 0) { git push }
-          exit 0
+          $manifest = @{
+            version = (Get-Content VERSION -Raw).Trim()
+            sha256 = (Get-FileHash download/Butchies-KI-Setup.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          }
+          $manifest | ConvertTo-Json -Compress | Set-Content download/update.json -Encoding ASCII
+          git add download/Butchies-KI-Setup.exe download/update.json
+          git commit -m "Setup.exe automatisch gebaut"
+          if ($LASTEXITCODE -ne 0) { throw "Download-Commit fehlgeschlagen." }
+          git push
+          if ($LASTEXITCODE -ne 0) { throw "GitHub-Download konnte nicht veröffentlicht werden." }
