@@ -715,6 +715,18 @@ async function loadStorage() {
         const note = document.createElement("p");
         note.textContent = "Freigegeben (noch keine Datenverlagerung)";
         info.append(note);
+        if (disk.mountpoint && !disk.ro && disk.available > 0) {
+          row.append(button("Daten verlagern", "", async () => {
+            try {
+              const result = await api("/api/storage/plan", {uuid:disk.uuid});
+              const p = result.plan;
+              if (!p.fits) throw new Error("Nicht genug Speicher bis zur 90-%-Grenze.");
+              if (!confirm("Datenverlagerung bestätigen?\nQuelle: "+p.source+"\nZiel: "+p.target+"\nDateien: "+p.files+"\nGröße: "+(p.bytes/1e9).toFixed(2)+" GB\nDer Server ist währenddessen nicht erreichbar. Originaldateien bleiben erhalten.")) return;
+              await api("/api/storage/migrate", {uuid:disk.uuid, confirmed:true});
+              alert("Verlagerung beauftragt. Der Server wird nach Abschluss erneut gestartet.");
+            } catch(e) { showErr(e); }
+          }));
+        }
         row.append(button("Freigabe widerrufen", "", async () => {
           if (!confirm("Freigabe widerrufen? Dateien bleiben unverändert.")) return;
           try { await api("/api/storage/revoke", {uuid:disk.uuid, confirmed:true}); await loadStorage(); }
