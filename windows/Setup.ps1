@@ -426,13 +426,13 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
   function Q($s) { "'" + ($s -replace "'", "'\''") + "'" }
   $ids = ($c.Models | Where-Object { $_.id -notlike "custom*" } | ForEach-Object { $_.id }) -join ","
   $cfg = "# Butchies KI Studio – Einstellungen für die Installation`n# Das Passwort wird nach der Installation automatisch vom Stick gelöscht.`n" +
-         "BKI_HOSTNAME=$(Q $c.Host)`nBKI_USERNAME=$(Q $c.User)`nBKI_PASSWORD=$(Q $c.Password)`n" +
+         "BKI_HOSTNAME=$(Q $c.Host)`n" +
          "BKI_MODELS=$(Q $ids)`nBKI_CUSTOM_MODELS=$(Q ($c.Custom -join ' '))`nBKI_EXTENSIONS=$(Q ($c.Extensions -join ','))`n"
   SchreibeLF (Join-Path $payload "config.env") $cfg
   $c.Password = $null
   SchreibeLF (Join-Path $payload "VERSION") ((Get-Content (Join-Path $src "VERSION") -Raw).Trim())
   SchreibeLF (Join-Path $payload "iso.txt") $c.IsoName
-  Row bki ok "Automatische Installation einbauen" "Butchies $((Get-Content (Join-Path $src 'VERSION') -Raw).Trim()) · $($c.Host) · $($c.User)"; Pct 78
+  Row bki ok "Automatische Installation einbauen" "Butchies $((Get-Content (Join-Path $src 'VERSION') -Raw).Trim()) · $($c.Host)"; Pct 78
   # --- KI-Modelle auf den Stick
   if ($c.ModelsOnStick) {
     $md = if ($c.ModelDrive) { $c.ModelDrive } else { $d = Get-Volume -FileSystemLabel "BKIMODELLE" -ErrorAction SilentlyContinue; if ($d) { "$($d.DriveLetter):\" } }
@@ -636,10 +636,7 @@ $xaml = @'
         <Grid>
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
           <StackPanel><TextBlock Text="Name im Heimnetz" Foreground="#5C5C5C" Margin="0,0,0,4"/><TextBox x:Name="TbHost" Text="butchies-ki"/></StackPanel>
-          <StackPanel Grid.Column="2"><TextBlock Text="Benutzer (Linux/SSH)" Foreground="#5C5C5C" Margin="0,0,0,4"/><TextBox x:Name="TbUser" Text="butchies"/></StackPanel>
-          <StackPanel Grid.Column="4"><TextBlock Text="Passwort (mind. 8 Zeichen)" Foreground="#5C5C5C" Margin="0,0,0,4"/><PasswordBox x:Name="Pw1"/></StackPanel>
         </Grid>
-        <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><TextBlock Text="Passwort wiederholen:" Foreground="#5C5C5C" VerticalAlignment="Center" Margin="0,0,8,0"/><PasswordBox x:Name="Pw2" Width="220"/></StackPanel>
         <Border x:Name="WarnBox" Margin="0,16,0,0" Background="#FDE7E9" BorderBrush="#F1BBBC" BorderThickness="1" CornerRadius="8" Padding="14,10">
           <StackPanel>
             <TextBlock x:Name="WarnTitle" FontWeight="SemiBold"/>
@@ -688,7 +685,7 @@ try { $w.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([IO.MemoryStream]::n
 $ui = @{}
 foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
   "PgUsb", "RbHave", "RbNew", "DiskList", "BtnRescan", "UsbInfo", "PgKi", "KiListInfo", "BtnCustom", "CustomUrl", "RbLater", "RbStick", "KiSum", "KiList",
-  "PgStick", "StickTitle", "StickSub", "TbHost", "TbUser", "Pw1", "Pw2", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText",
+  "PgStick", "StickTitle", "StickSub", "TbHost", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText",
   "ErrText", "BtnLog", "BtnBack", "BtnNext") { $ui[$n] = $w.FindName($n) }
 
 function Brush($c) { (New-Object Windows.Media.BrushConverter).ConvertFromString($c) }
@@ -927,14 +924,11 @@ $ui.BtnNext.Add_Click({
       GeheZu 5
     }
     5 {
-      $h = $ui.TbHost.Text.Trim().ToLower(); $u = $ui.TbUser.Text.Trim().ToLower()
+      $h = $ui.TbHost.Text.Trim().ToLower()
       if ($h -notmatch '^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$') { $ui.StickErr.Text = "Name: nur Kleinbuchstaben, Ziffern und Bindestrich (max. 30)."; return }
-      if ($u -notmatch '^[a-z_][a-z0-9_-]{0,31}$' -or $u -in @("root", "admin", "ubuntu")) { $ui.StickErr.Text = "Benutzer: nur Kleinbuchstaben/Ziffern/_/-, nicht root/admin/ubuntu."; return }
-      if ($ui.Pw1.Password.Length -lt 8 -or $ui.Pw1.Password -cne $ui.Pw2.Password -or $ui.Pw1.Password -match "[\r\n]") { $ui.StickErr.Text = "Passwörter zu kurz oder nicht gleich."; return }
       if ($sync.Choice.Mode -eq "neu" -and -not $ui.CbConfirm.IsChecked) { $ui.StickErr.Text = "Bitte bestätigen, dass der Stick gelöscht werden darf."; return }
       $ui.StickErr.Text = ""
-      $sync.Choice.Host = $h; $sync.Choice.User = $u; $sync.Choice.Password = $ui.Pw1.Password
-      $ui.Pw1.Clear(); $ui.Pw2.Clear()
+      $sync.Choice.Host = $h
       $tc = Join-Path $Home2 "taskleiste.json"; @{ host = $h; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tc -Encoding UTF8
       # Taskleisten-Programm auf den gewählten Namen umstellen
       Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'Butchies-KI\.ps1' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
