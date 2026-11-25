@@ -82,6 +82,7 @@ function setView(v) {
   document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   ["chat", "models", "system", "settings", "ext", "images"].forEach((n) => { $("view-" + n).hidden = n !== v; });
   if (v === "models") loadModels();
+  if (v === "system") loadStorage();
   if (v === "ext") loadExt();
   if (v === "images") loadImages();
   if (v === "system") { loadUpdates(); loadLogs(); }
@@ -687,3 +688,30 @@ $("chat-model").addEventListener("change", async () => {
   catch(e){showErr(e);}
   finally { await refreshChatModels(); $("send-btn").disabled=false; }
 });
+
+async function loadStorage() {
+  const list = $("storage-list");
+  list.textContent = "Datenträger werden gesucht …";
+  try {
+    const d = await api("/api/storage");
+    list.replaceChildren();
+    for (const disk of d.devices) {
+      const row = document.createElement("div"); row.className = "item";
+      const info = document.createElement("div");
+      const title = document.createElement("strong"); title.textContent = disk.path || disk.name;
+      const details = document.createElement("p"); details.className = "muted";
+      details.textContent = [disk.fstype || disk.type, disk.mountpoint || "Nicht eingebunden", disk.ro ? "Schreibgeschützt" : "", fmtGB(Number(disk.size)||0)].filter(Boolean).join(" · ");
+      info.append(title,details);
+      if (disk.total > 0) {
+        const percent = Math.round(disk.used / disk.total * 100);
+        const bar = document.createElement("progress"); bar.max=100; bar.value=percent; bar.style.width="100%"; bar.setAttribute("aria-label","Speicherbelegung");
+        const usage = document.createElement("p"); usage.textContent = percent+" % belegt · "+fmtGB(disk.available)+" bis zur 90-%-Grenze verfügbar";
+        if(percent>=85) usage.style.color="#A65B00";
+        info.append(bar,usage);
+      }
+      row.append(info); list.append(row);
+    }
+    if (!d.devices.length) list.textContent="Keine Datenträger gefunden.";
+  } catch(e) { list.textContent=e.message || String(e); }
+}
+$("storage-refresh").addEventListener("click",loadStorage);
