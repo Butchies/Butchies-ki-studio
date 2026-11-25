@@ -433,6 +433,16 @@ def http_json(url, timeout=30):
         return json.loads(r.read().decode("utf-8"))
 
 
+def storage_budget(path):
+    usage = shutil.disk_usage(path)
+    return max(0, min(usage.free, usage.total * 9 // 10 - usage.used))
+
+
+def require_storage(path, additional):
+    if additional > storage_budget(path):
+        raise RuntimeError("90-%-Speichergrenze: Download pausiert. Speicher freigeben oder erweitern.")
+
+
 def download(url, dest, on_progress):
     """Download mit Fortsetzen (.part) und Fortschritt 0..1."""
     part = dest + ".part"
@@ -446,6 +456,9 @@ def download(url, dest, on_progress):
             have = 0  # Server kann nicht fortsetzen
         length = int(r.headers.get("Content-Length") or 0)
         total = have + length if length else 0
+        directory = os.path.dirname(os.path.abspath(dest))
+        if length:
+            require_storage(directory, max(0, length - (os.path.getsize(part) if not have and os.path.exists(part) else 0)))
         mode = "ab" if have else "wb"
         done = have
         last = 0
@@ -454,6 +467,7 @@ def download(url, dest, on_progress):
                 chunk = r.read(1024 * 1024)
                 if not chunk:
                     break
+                require_storage(directory, len(chunk))
                 f.write(chunk)
                 done += len(chunk)
                 ACTIVITY.touch()
@@ -573,9 +587,9 @@ def download_model(mid, p_from=0, p_to=100, activate=False):
     JOB.progress(p_from, "Suche %s auf Hugging Face …" % m["name"])
     fname = find_hf_file(m["repo"], m["pattern"])
     os.makedirs(MODEL_DIR, exist_ok=True)
-    free = shutil.disk_usage(MODEL_DIR).free
+    free = storage_budget(MODEL_DIR)
     if free < m["size_gb"] * 1e9 * 1.05:
-        raise RuntimeError("Zu wenig Platz auf der SSD (%s frei, %s nötig)" % (gb(free), "%.1f GB" % m["size_gb"]))
+        raise RuntimeError("90-%-Speichergrenze (%s nutzbar, %s nötig)" % (gb(free), "%.1f GB" % m["size_gb"]))
     url = "https://huggingface.co/%s/resolve/main/%s" % (m["repo"], fname)
     dest = os.path.join(MODEL_DIR, fname)
     span = p_to - p_from
