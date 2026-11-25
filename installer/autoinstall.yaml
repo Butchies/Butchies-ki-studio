@@ -36,7 +36,7 @@ autoinstall:
 
   ssh:
     install-server: true
-    allow-pw: true
+    allow-pw: false
 
   storage:
     layout:
