@@ -694,7 +694,7 @@ $w = [Windows.Markup.XamlReader]::Parse($xaml)
 try { $w.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([IO.MemoryStream]::new([Convert]::FromBase64String($LogoPng))) } catch {}
 $ui = @{}
 foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
-  "PgUsb", "RbHave", "RbNew", "DiskList", "BtnRescan", "UsbInfo", "PgKi", "KiListInfo", "BtnCustom", "CustomUrl", "RbLater", "RbStick", "KiSum", "KiList",
+  "PgUsb", "RbHave", "RbNew", "DiskList", "BtnRescan", "UsbInfo", "PgKi", "KiListInfo", "BtnHF", "BtnCustom", "CustomUrl", "RbLater", "RbStick", "KiSum", "KiList",
   "PgStick", "StickTitle", "StickSub", "TbHost", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText", "FConsole",
   "ErrText", "BtnLog", "BtnBack", "BtnNext") { $ui[$n] = $w.FindName($n) }
 
@@ -812,7 +812,7 @@ function StarteAktion($name) {
 }
 
 # --- KI-Auswahl-Liste ---------------------------------------------------------------
-$script:kiChecks = @(); $script:custom = New-Object Collections.ArrayList
+$script:kiChecks = @(); $script:custom = New-Object Collections.ArrayList; $script:customSizes = @{}
 function ZeigeKiListe {
   $ui.KiList.Children.Clear(); $script:kiChecks = @()
   $cat = $sync.Catalog
@@ -820,7 +820,7 @@ function ZeigeKiListe {
   $live = @($cat.models | Where-Object { $_.ok -ne $null }).Count
   $ui.KiListInfo.Text = "Liste aktualisiert ($($cat.updated)) · Quelle: GitHub-Katalog" + $(if ($live) { " + Hugging Face (Größen live geprüft)" } else { " · Größen werden geprüft …" })
   $items = @(); foreach ($m in $cat.models) { $items += @{ Kind = "model"; Obj = $m } }; foreach ($e in $cat.extensions) { $items += @{ Kind = "ext"; Obj = $e } }
-  foreach ($u in $script:custom) { $items += @{ Kind = "custom"; Obj = [pscustomobject]@{ id = "custom"; name = [IO.Path]::GetFileName($u); desc = "Eigenes Modell"; size_gb = 0; url = $u } } }
+  foreach ($u in $script:custom) { $items += @{ Kind = "custom"; Obj = [pscustomobject]@{ id = "custom"; name = [Uri]::UnescapeDataString([IO.Path]::GetFileName($u)); desc = "Eigenes Modell"; size_gb = [double]$script:customSizes[$u]; url = $u } } }
   foreach ($it in $items) {
     $o = $it.Obj
     $cb = New-Object Windows.Controls.CheckBox; $cb.Margin = "0,0,0,6"; $cb.Padding = "8,0,0,0"; $cb.Tag = $it
@@ -850,14 +850,33 @@ $ui.BtnCustom.Add_Click({
   else { [Windows.MessageBox]::Show("Bitte einen Hugging-Face-Link zu einer .gguf-Datei einfügen, z. B.`nhttps://huggingface.co/<name>/<repo>/resolve/main/<datei>.gguf", "Eigenes Modell") | Out-Null }
 })
 
-($ui.CustomUrl.Parent.Parent.FindName("BtnHF")).Add_Click({
+ function Select-HFItems($items, $title, [bool]$multiple) {
+  $dlg = New-Object Windows.Window
+  $dlg.Title = $title; $dlg.Width = 760; $dlg.Height = 540
+  $dlg.Owner = $w; $dlg.WindowStartupLocation = "CenterOwner"
+  $dlg.Background = Brush "#EDF5FC"
+  $panel = New-Object Windows.Controls.DockPanel; $panel.Margin = "16"
+  $ok = New-Object Windows.Controls.Button; $ok.Content = "Auswahl übernehmen"; $ok.Height = 38; $ok.Background = Brush "#0876CE"; $ok.Foreground = Brush "#FFFFFF"
+  [Windows.Controls.DockPanel]::SetDock($ok,"Bottom"); [void]$panel.Children.Add($ok)
+  $list = New-Object Windows.Controls.ListBox; $list.Margin = "0,0,0,12"
+  if ($multiple) { $list.SelectionMode = "Extended" }
+  foreach ($item in $items) {
+    $row = New-Object Windows.Controls.ListBoxItem; $row.Tag = $item; $row.Padding = "8"
+    $row.Content = if ($item.path) { "$($item.path)  |  $($item.GB) GB" } else { "$($item.id)  |  $($item.lastModified)" }
+    [void]$list.Items.Add($row)
+  }
+  [void]$panel.Children.Add($list); $dlg.Content = $panel
+  $ok.Add_Click({ $dlg.DialogResult = $true })
+  if ($dlg.ShowDialog()) { foreach ($row in $list.SelectedItems) { $row.Tag } }
+}
+$ui.BtnHF.Add_Click({
   try {
     Add-Type -AssemblyName Microsoft.VisualBasic
     $query = [Microsoft.VisualBasic.Interaction]::InputBox("Modellname suchen (leer = neueste Modelle)", "Hugging Face", "")
     $url = "https://huggingface.co/api/models?filter=gguf&sort=lastModified&direction=-1&limit=50"
     if ($query) { $url += "&search=" + [Uri]::EscapeDataString($query) }
     $repos = @(Invoke-RestMethod -Uri $url -TimeoutSec 20)
-    $pick = $repos | Select-Object id,lastModified,downloads | Out-GridView -Title "GGUF-Modell auswählen" -OutputMode Single
+    $pick = Select-HFItems $repos "GGUF-Modell auswählen" $false
     if (-not $pick) { return }
     $files = @(Invoke-RestMethod -Uri ("https://huggingface.co/api/models/" + $pick.id + "/tree/main?recursive=true") -TimeoutSec 20)
     $variants = $files | Where-Object { $_.type -eq "file" -and $_.path -match '\.gguf ----------------------------------------------------------------------
@@ -1175,12 +1194,13 @@ GeheZu 0
 Starte "start"
 [void]$w.ShowDialog()
  } | Select-Object path,@{Name="GB";Expression={[math]::Round($_.size/1GB,2)}}
-    $chosen = @($variants | Out-GridView -Title "GGUF-Varianten auswählen (mehrere möglich)" -PassThru)
+    $chosen = @(Select-HFItems $variants "GGUF-Varianten auswählen (Strg für Mehrfachauswahl)" $true)
     $sync.Choice.Picked = @($script:kiChecks | Where-Object IsChecked | ForEach-Object { "$($_.Tag.Kind):$($_.Tag.Obj.id):$($_.Tag.Obj.url)" })
     foreach ($f in $chosen) {
       $encoded = (($f.path -split '/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
       $u = "https://huggingface.co/" + $pick.id + "/resolve/main/" + $encoded
       if ($script:custom -notcontains $u) { [void]$script:custom.Add($u) }
+      $script:customSizes[$u] = [double]$f.GB
       $sync.Choice.Picked += "custom:custom:$u"
     }
     ZeigeKiListe
