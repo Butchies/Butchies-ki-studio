@@ -39,7 +39,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.11"
+VERSION = "0.4.12"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -1491,6 +1491,41 @@ def rollback_app():
 
 SESSIONS = {}
 SESSION_TTL = 30 * 24 * 3600
+SESSION_PATH = os.path.join(DATA_DIR, "remembered-sessions.json")
+_session_lock = threading.Lock()
+
+
+def remembered_sessions():
+    try:
+        with open(SESSION_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, ValueError):
+        return {}
+
+
+def save_remembered_sessions(records):
+    os.makedirs(DATA_DIR, exist_ok=True)
+    tmp = SESSION_PATH + ".tmp"
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
+        json.dump(records, f)
+    os.replace(tmp, SESSION_PATH)
+
+
+def token_digest(token):
+    return hashlib.sha256(token.encode("ascii")).hexdigest()
+
+
+def revoke_sessions(token=None):
+    with _session_lock:
+        if token is None:
+            SESSIONS.clear()
+            save_remembered_sessions({})
+            return
+        SESSIONS.pop(token, None)
+        records = remembered_sessions()
+        if records.pop(token_digest(token), None) is not None:
+            save_remembered_sessions(records)
+
 
 STATIC = {
     "/": ("index.html", "text/html; charset=utf-8"),
@@ -1537,16 +1572,26 @@ class Handler(BaseHTTPRequestHandler):
         if not m:
             return None
         tok = m.group(1)
-        exp = SESSIONS.get(tok)
-        if exp and exp > time.time():
-            return tok
-        SESSIONS.pop(tok, None)
+        with _session_lock:
+            now = time.time()
+            if SESSIONS.get(tok, 0) > now or remembered_sessions().get(token_digest(tok), 0) > now:
+                return tok
+            SESSIONS.pop(tok, None)
         return None
 
-    def new_session_header(self):
+    def new_session_header(self, remember=False):
         tok = secrets.token_urlsafe(32)
-        SESSIONS[tok] = time.time() + SESSION_TTL
-        return {"Set-Cookie": "bki=%s; Path=/; Max-Age=%d; HttpOnly; SameSite=Strict" % (tok, SESSION_TTL)}
+        now = time.time()
+        cookie = "bki=%s; Path=/; HttpOnly; SameSite=Strict" % tok
+        with _session_lock:
+            if remember:
+                records = {key: exp for key, exp in remembered_sessions().items() if exp > now}
+                records[token_digest(tok)] = now + SESSION_TTL
+                save_remembered_sessions(records)
+                cookie += "; Max-Age=%d" % SESSION_TTL
+            else:
+                SESSIONS[tok] = now + 12 * 3600
+        return {"Set-Cookie": cookie}
 
     # --- GET ---------------------------------------------------------------
     def do_GET(self):
@@ -1679,7 +1724,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Passwort ist schon gesetzt", 403)
                 set_ui_password(pw)
             log("Passwort für die Oberfläche festgelegt")
-            return self.send_json({"ok": True}, extra_headers=self.new_session_header())
+            return self.send_json({"ok": True}, extra_headers=self.new_session_header(data.get("remember") is True))
         if path == "/api/login/reset":
             pw = str(data.get("password", ""))
             if error := password_error(pw):
@@ -1696,15 +1741,15 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Einmalcode oder Rücksetz-PIN ungültig", 403)
                 os.unlink(RECOVERY_PATH)
                 set_ui_password(pw)
-                SESSIONS.clear()
-                headers = self.new_session_header()
+                revoke_sessions()
+                headers = self.new_session_header(data.get("remember") is True)
             return self.send_json({"ok": True}, extra_headers=headers)
         if path == "/api/login":
             time.sleep(0.5)  # bremst Raten
             with _password_lock:
                 if not check_password(str(data.get("password", ""))):
                     return self.error("Falsches Passwort", 401)
-                headers = self.new_session_header()
+                headers = self.new_session_header(data.get("remember") is True)
             ACTIVITY.touch()
             return self.send_json({"ok": True}, extra_headers=headers)
 
@@ -1714,8 +1759,10 @@ class Handler(BaseHTTPRequestHandler):
         ACTIVITY.touch()
 
         if path == "/api/logout":
-            SESSIONS.pop(tok, None)
-            return self.send_json({"ok": True})
+            revoke_sessions(tok)
+            return self.send_json({"ok": True}, extra_headers={
+                "Set-Cookie": "bki=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict",
+            })
         if path == "/api/activity":
             return self.send_json({"ok": True})
         if path == "/api/chat":
@@ -1800,6 +1847,7 @@ class Handler(BaseHTTPRequestHandler):
                 if not check_password(str(data.get("old", ""))):
                     return self.error("Altes Passwort stimmt nicht", 403)
                 set_ui_password(new)
+                revoke_sessions()
             if data.get("linux"):
                 user = CONFIG.get("username", "butchies")
                 if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", user):

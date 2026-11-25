@@ -75,13 +75,14 @@ $("gate-form").addEventListener("submit", async (e) => {
   $("gate-switch").disabled = true;
   $("gate-error").textContent = "";
   const pw = $("gate-pw").value;
+  const remember = $("gate-remember").checked;
   try {
     if (mode !== "login" && pw !== $("gate-pw2").value) throw new Error("Die Passwörter sind nicht gleich.");
-    if (mode === "setup") await api("/api/setup", { password: pw });
+    if (mode === "setup") await api("/api/setup", { password: pw, remember });
     else if (mode === "reset") await api("/api/login/reset", {
-      password: pw, pin: $("gate-pin").value, code: $("gate-code").value.trim(),
+      password: pw, remember, pin: $("gate-pin").value, code: $("gate-code").value.trim(),
     });
-    else await api("/api/login", { password: pw });
+    else await api("/api/login", { password: pw, remember });
     const status = await api("/api/state");
     if (!status.logged_in) throw new Error("Die Sitzung konnte nicht geöffnet werden.");
     $("gate-form").reset();

@@ -70,7 +70,7 @@ if ($ConsoleOnly) { OeffneLinuxKonsole; return }
 # --- Gemeinsamer Zustand mit dem Hintergrund-Thread -----------------------------
 $sync = [hashtable]::Synchronized(@{
   Host = $cfg.host; Base = ""; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
-  State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
+  Remember = (Test-Path $pwFile); State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
 })
@@ -121,7 +121,12 @@ $worker = {
   function Anmelden {
     if (-not $sync.Password) { $sync.State = "anmelden"; return $false }
     $r = Anfrage "POST" "/api/login" @{ password = $sync.Password } 5000
-    if ($r.Code -eq 200) { $sync.LoginError = ""; $sync.AcceptedPassword = $sync.Password; return $true }
+    if ($r.Code -eq 200) {
+      $sync.LoginError = ""
+      if ($sync.Remember) { $sync.AcceptedPassword = $sync.Password }
+      else { $sync.Password = "" }
+      return $true
+    }
     if ($r.Code -eq 401) { $sync.LoginError = "Passwort falsch"; $sync.Password = ""; $sync.State = "anmelden" }
     return $false
   }
@@ -292,8 +297,9 @@ $xamlVorlage = @'
         <TextBlock Text="Passwort der Butchies-KI-Oberfläche:" Foreground="%Sub%" Margin="0,0,0,6"/>
         <PasswordBox x:Name="Pw" Height="32" Padding="6,5" Background="%Input%" Foreground="%Text%" BorderBrush="%BtnBorder%"/>
         <TextBlock x:Name="LoginMsg" Foreground="%Crit%" Margin="0,4,0,0"/>
+        <CheckBox x:Name="RememberLogin" Content="Automatisch anmelden" Margin="0,6,0,0"/>
         <Button x:Name="BtnLogin" Content="Anmelden" Style="{StaticResource Primary}" Margin="0,8,0,0"/>
-        <TextBlock Text="Wird verschlüsselt nur auf diesem PC gespeichert." Foreground="%Sub%" Margin="0,6,0,0" TextWrapping="Wrap"/>
+        <TextBlock Text="Bei automatischer Anmeldung speichert Windows das Passwort verschlüsselt." Foreground="%Sub%" Margin="0,6,0,0" TextWrapping="Wrap"/>
       </StackPanel>
 
       <StackPanel x:Name="DataPanel" Margin="0,14,0,0">
@@ -385,7 +391,7 @@ function ZeigeFenster {
   $w = [Windows.Markup.XamlReader]::Parse($xaml)
   [System.Windows.Forms.Integration.ElementHost]::EnableModelessKeyboardInterop($w)
   $n = @{}
-  foreach ($name in "Pill", "PillText", "Sub", "LoginPanel", "Pw", "LoginMsg", "BtnLogin", "DataPanel", "CpuText", "CpuBar", "RamText", "RamBar", "DiskText", "DiskBar", "TempText", "TpsText", "KiText", "JobBox", "JobPct", "JobName", "JobBlocks", "JobText", "UpdateText", "Info", "BtnOpen", "BtnSleep", "BtnReboot", "SettingsPanel", "HostBox", "AutoStart", "BtnSave", "BtnForget", "LinkShutdown", "LinkSettings", "LinkQuit") {
+  foreach ($name in "Pill", "PillText", "Sub", "LoginPanel", "Pw", "LoginMsg", "RememberLogin", "BtnLogin", "DataPanel", "CpuText", "CpuBar", "RamText", "RamBar", "DiskText", "DiskBar", "TempText", "TpsText", "KiText", "JobBox", "JobPct", "JobName", "JobBlocks", "JobText", "UpdateText", "Info", "BtnOpen", "BtnSleep", "BtnReboot", "SettingsPanel", "HostBox", "AutoStart", "BtnSave", "BtnForget", "LinkShutdown", "LinkSettings", "LinkQuit") {
     $n[$name] = $w.FindName($name)
   }
   for ($i = 0; $i -lt 20; $i++) { $r = New-Object Windows.Shapes.Rectangle; $r.Margin = "1,0,1,0"; $r.RadiusX = 1; $r.RadiusY = 1; [void]$n.JobBlocks.Children.Add($r) }
@@ -401,9 +407,12 @@ function ZeigeFenster {
   $n.LinkShutdown.Add_Click({
     if ([Windows.MessageBox]::Show("Mini-PC herunterfahren?`nEinschalten geht dann nur per Wake-on-LAN oder am Gerät.", "Butchies KI", "YesNo", "Warning") -eq "Yes") { $sync.Queue.Enqueue("shutdown") }
   })
+  $n.RememberLogin.IsChecked = $sync.Remember
   $n.BtnLogin.Add_Click({
     $pw = $script:win.Tag.N.Pw.Password
     if ($pw.Length -lt 4) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 4 Zeichen."; return }
+    $sync.Remember = [bool]$script:win.Tag.N.RememberLogin.IsChecked
+    if (-not $sync.Remember) { $sync.AcceptedPassword = ""; SpeicherePasswort "" }
     $sync.Password = $pw; $sync.Queue.Enqueue("login"); $script:win.Tag.N.Pw.Clear()
     $script:win.Tag.N.LoginMsg.Text = "Melde an …"
   })
@@ -419,7 +428,7 @@ function ZeigeFenster {
     AutostartSetzen ([bool]$script:win.Tag.N.AutoStart.IsChecked)
     $script:win.Tag.N.SettingsPanel.Visibility = "Collapsed"
   })
-  $n.BtnForget.Add_Click({ SpeicherePasswort ""; $sync.Password = ""; $sync.State = "anmelden"; $sync.Version++ })
+  $n.BtnForget.Add_Click({ SpeicherePasswort ""; $sync.Remember = $false; $sync.AcceptedPassword = ""; $sync.Password = ""; $sync.State = "anmelden"; $sync.Version++ })
   $n.LinkQuit.Add_Click({ Beenden })
   $w.Add_Deactivated({ if ($script:win) { $script:win.Close() } })
   $w.Add_Closed({ $script:win = $null; $script:closedAt = Get-Date; $sync.Fast = $false })
