@@ -937,10 +937,11 @@ class Llama:
                     self.proc.wait(15)
                 except subprocess.TimeoutExpired:
                     self.proc.kill()
+                    self.proc.wait()
             self.proc = None
             self.state = "aus"
 
-    def start(self):
+    def start(self, model_override=None):
         with self.lock:
             if self.running():
                 return
@@ -954,7 +955,9 @@ class Llama:
                 model, path = os.path.basename(files[0]), files[0]
                 extra = ["--mmproj", files[1], "-c", "8192"]
             else:
-                model = CONFIG.get("active_model")
+                model = model_override if model_override is not None else CONFIG.get("active_model")
+                if model_override is not None and model_override not in {m["file"] for m in installed_models()}:
+                    raise RuntimeError("Spezialistenmodell nicht installiert")
                 path = os.path.join(MODEL_DIR, model) if model else ""
                 if not binary or not model or not os.path.exists(path):
                     self.state = "nicht eingerichtet"
@@ -1009,6 +1012,44 @@ class Llama:
 
 LLAMA = Llama()
 VISION = Llama(port=8082, kind="vision")
+TEAM_ENGINE = Llama(port=8083, kind="team")
+TEAM_LOCK = threading.Lock()
+
+
+def team_specialist_response(model, role, messages):
+    """Run a temporary text specialist without changing the saved main model."""
+    with TEAM_LOCK:
+        TEAM_ENGINE.stop()
+        try:
+            TEAM_ENGINE.start(model_override=model)
+            deadline = time.monotonic() + 300
+            while time.monotonic() < deadline:
+                if not TEAM_ENGINE.running():
+                    raise RuntimeError("Spezialist konnte nicht starten")
+                if TEAM_ENGINE.healthy():
+                    break
+                time.sleep(2)
+            else:
+                raise RuntimeError("Spezialist nicht rechtzeitig bereit")
+            prompt = [{"role": "system", "content": "Du bist der KI-Spezialist für " + role +
+                       ". Liefere fachliche Hinweise für die Haupt-KI, keine Steuerbefehle."}]
+            prompt.extend({"role": m["role"], "content": m["content"][:8000]}
+                          for m in messages[-8:] if isinstance(m, dict)
+                          and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str))
+            conn = http.client.HTTPConnection("127.0.0.1", TEAM_ENGINE.port, timeout=300)
+            try:
+                conn.request("POST", "/v1/chat/completions",
+                             body=json.dumps({"messages": prompt, "stream": False, "max_tokens": 1024}),
+                             headers={"Content-Type": "application/json"})
+                response = conn.getresponse()
+                if response.status != 200:
+                    raise RuntimeError("Spezialistenanfrage fehlgeschlagen")
+                return json.loads(response.read())["choices"][0]["message"]["content"]
+            finally:
+                conn.close()
+        finally:
+            TEAM_ENGINE.stop()
+
 
 
 # ---------------------------------------------------------------------------
