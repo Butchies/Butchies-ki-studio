@@ -183,10 +183,16 @@ switch ($task) {
   New-Item -ItemType Directory -Force -Path $startMenu | Out-Null
   foreach ($dir in @([Environment]::GetFolderPath("Desktop"), $startMenu)) {
     $l = $sh.CreateShortcut((Join-Path $dir "Butchies KI.lnk"))
-    if ($edge) { $l.TargetPath = $edge; $l.Arguments = "--app=http://localhost:8765/ --user-data-dir=`"$($sync.Home)\edge-profil`" --window-size=1400,900 --unsafely-treat-insecure-origin-as-secure=http://$host2.local"; $l.IconLocation = "$edge,0" }
+    if ($edge) { $l.TargetPath = $edge; $l.Arguments = "--app=http://localhost:8765/ --user-data-dir=`"$($sync.Home)\edge-profil`" --window-size=1400,900 --unsafely-treat-insecure-origin-as-secure=http://$host2"; $l.IconLocation = "$edge,0" }
     else { $l.TargetPath = "http://localhost:8765/" }
     $l.Save()
   }
+  $monitor = $sh.CreateShortcut((Join-Path $startMenu "Butchies KI Servermonitor.lnk"))
+  $monitor.TargetPath = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe"
+  $monitor.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ps1`""
+  $monitor.WorkingDirectory = $sync.Home
+  $monitor.WindowStyle = 7
+  $monitor.Save()
   Row lnk ok "Desktop-Verknüpfung und Startmenü"; Pct 65
   Row auto spin "Mit Windows starten" "Autostart"
   $startup = [Environment]::GetFolderPath("Startup")
