@@ -70,7 +70,7 @@ def resolve_data_directory():
     return target
 
 
-DATA_DIR = resolve_data_directory()
+DATA_DIR = "/var/lib/butchies-ki" if len(sys.argv) == 3 and sys.argv[1] == "--rollback-storage" else resolve_data_directory()
 MODEL_DIR = os.path.join(DATA_DIR, "models")
 LLAMA_DIR = os.path.join(DATA_DIR, "llama")
 CONFIG_PATH = os.path.join(ETC_DIR, "config.json")
@@ -1790,7 +1790,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Separate systemd unit survives shutdown of the web service.
                 command = ["systemd-run", "--unit=" + unit, "--collect",
                            "/bin/sh", "-c",
-                           'systemctl stop butchies-ki.service || exit 1; "$1" "$2" --migrate-storage "$3"; rc=$?; systemctl start butchies-ki.service || exit 1; exit "$rc"',
+                           'systemctl stop butchies-ki.service || exit 1; "$1" "$2" --migrate-storage "$3"; rc=$?; systemctl start butchies-ki.service; sleep 5; if ! systemctl is-active --quiet butchies-ki.service; then systemctl stop butchies-ki.service; if [ "$rc" -eq 0 ]; then "$1" "$2" --rollback-storage "$3" || exit 1; fi; systemctl start butchies-ki.service || exit 1; exit 1; fi; exit "$rc"',
                            "migration", sys.executable, script, uid]
                 subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=15)
                 return self.send_json({"ok": True, "message": "Verlagerung beauftragt; Server wird neu gestartet"})
@@ -2155,6 +2155,18 @@ def offline_storage_migration(uid):
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--migrate-storage":
         offline_storage_migration(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == "--rollback-storage":
+        if DRYRUN or os.geteuid() != 0:
+            sys.exit("Wiederherstellung nicht erlaubt")
+        state = subprocess.check_output(["systemctl", "show", "butchies-ki.service", "--property=ActiveState", "--value"], text=True, timeout=10).strip()
+        if state not in ("inactive", "failed"):
+            sys.exit("Serverdienst muss gestoppt sein")
+        if (CONFIG.get("active_storage") or {}).get("uuid") != sys.argv[2] or "previous_storage" not in CONFIG:
+            sys.exit("Keine passende vorherige Speicherkonfiguration")
+        updated = dict(CONFIG)
+        updated["active_storage"] = updated.pop("previous_storage")
+        save_config(updated)
+        migration_status("failed", uuid=sys.argv[2], error="Serverstart fehlgeschlagen; vorheriger Speicherpfad wiederhergestellt")
     elif len(sys.argv) == 1:
         main()
     else:
