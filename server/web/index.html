@@ -13,7 +13,9 @@
   <form id="gate-form" class="gate-card">
     <div class="brand big"><span class="logo" aria-hidden="true"></span>Butchies KI Studio <span class="accent">Offline</span></div>
     <h1 id="gate-title">Anmelden</h1>
-    <p id="gate-text" class="muted">Gib dein Passwort für die Oberfläche ein.</p>
+    <p id="gate-text" class="muted">Melde dich mit deinem persönlichen Benutzerkonto an.</p>
+    <label for="gate-user">Benutzername</label>
+    <input id="gate-user" type="text" autocomplete="username" required maxlength="64">
     <label for="gate-pw">Passwort</label>
     <input id="gate-pw" type="password" autocomplete="current-password" required minlength="8">
     <div id="gate-pw2-wrap" hidden>
@@ -191,7 +193,7 @@
         <h2>Passwort ändern</h2>
         <label for="pw-old">Altes Passwort</label><input id="pw-old" type="password" autocomplete="current-password">
         <label for="pw-new">Neues Passwort (mind. 8 Zeichen)</label><input id="pw-new" type="password" autocomplete="new-password">
-        <label class="check"><input type="checkbox" id="pw-linux" checked> Auch für Linux/SSH übernehmen</label>
+        <label class="check"><input type="checkbox" id="pw-linux" disabled> Linux-Systemkonto bleibt gesperrt</label>
         <p id="pw-msg" class="muted" role="status"></p>
         <button class="btn primary" type="submit">Ändern</button>
       </form>
