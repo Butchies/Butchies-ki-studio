@@ -2165,12 +2165,15 @@ if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--migrate-storage":
         offline_storage_migration(sys.argv[2])
     elif len(sys.argv) == 3 and sys.argv[1] == "--check-storage-start":
-        for attempt in range(30):
+        for attempt in range(150):
             try:
                 with urllib.request.urlopen("http://127.0.0.1:%d/api/ping" % PORT, timeout=2) as response:
                     info = json.load(response)
                 if info.get("ok") and info.get("name") == "Butchies KI Studio" and info.get("version") == VERSION:
-                    sys.exit(0)
+                    with urllib.request.urlopen("http://127.0.0.1:%d/api/local-readiness" % PORT, timeout=5) as response:
+                        readiness = json.load(response)
+                    if readiness.get("ok") and (not readiness.get("model_configured") or readiness.get("model_ready")):
+                        sys.exit(0)
             except (OSError, ValueError):
                 pass
             time.sleep(2)
