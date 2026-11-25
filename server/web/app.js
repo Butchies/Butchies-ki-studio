@@ -700,30 +700,47 @@ async function loadStorage() {
       const info = document.createElement("div");
       const title = document.createElement("strong"); title.textContent = disk.path || disk.name;
       const details = document.createElement("p"); details.className = "muted";
-      details.textContent = [disk.fstype || disk.type, disk.mountpoint || "Nicht eingebunden", disk.ro ? "Schreibgeschützt" : "", fmtGB(Number(disk.size)||0)].filter(Boolean).join(" · ");
+      details.textContent = [disk.fstype || disk.type, disk.mountpoint || "Nicht eingebunden", disk.ro ? "Schreibgeschützt" : "", ((Number(disk.size)||0)/1e9).toFixed(1)+" GB"].filter(Boolean).join(" · ");
       info.append(title,details);
       if (disk.total > 0) {
         const percent = Math.round(disk.used / disk.total * 100);
         const bar = document.createElement("progress"); bar.max=100; bar.value=percent; bar.style.width="100%"; bar.setAttribute("aria-label","Speicherbelegung");
-        const usage = document.createElement("p"); usage.textContent = percent+" % belegt · "+fmtGB(disk.available)+" bis zur 90-%-Grenze verfügbar";
+        const usage = document.createElement("p"); usage.textContent = percent+" % belegt · "+(disk.available/1e9).toFixed(1)+" GB"+" bis zur 90-%-Grenze verfügbar";
         if(percent>=85) usage.style.color="#A65B00";
         info.append(bar,usage);
       }
       row.append(info);
-      if (disk.uuid && disk.mountpoint && disk.mountpoint !== "/" && !disk.ro && disk.available > 0) {
-        const action = button("Speichererweiterung prüfen", "", () => {
-          const accepted = confirm("Datenträger " + disk.path + " (" + disk.mountpoint + ") als Speichererweiterung vormerken? Verfügbar: " + fmtGB(disk.available) + ". Es werden noch keine Daten verschoben oder Datenträger verändert.");
-          if (accepted) {
-            const note = document.createElement("p");
-            note.textContent = "Auswahl bestätigt. Automatische Einbindung und Verlagerung sind noch nicht verfügbar.";
-            info.append(note);
-          }
-        });
-        row.append(action);
+      const approved = disk.uuid && Object.prototype.hasOwnProperty.call(d.approved || {}, disk.uuid);
+      if (approved) {
+        const note = document.createElement("p");
+        note.textContent = "Freigegeben (noch keine Datenverlagerung)";
+        info.append(note);
+        row.append(button("Freigabe widerrufen", "", async () => {
+          if (!confirm("Freigabe widerrufen? Dateien bleiben unverändert.")) return;
+          try { await api("/api/storage/revoke", {uuid:disk.uuid, confirmed:true}); await loadStorage(); }
+          catch(e) { showErr(e); }
+        }));
+      } else if (disk.uuid && disk.mountpoint && disk.mountpoint !== "/" && !disk.ro && disk.available > 0) {
+        row.append(button("Speicher freigeben", "", async () => {
+          if (!confirm("Datenträger " + disk.path + " (" + disk.mountpoint + ") dauerhaft freigeben? Es werden keine Dateien verschoben.")) return;
+          try { await api("/api/storage/approve", {uuid:disk.uuid, confirmed:true}); await loadStorage(); }
+          catch(e) { showErr(e); }
+        }));
       }
       list.append(row);
     }
-    if (!d.devices.length) list.textContent="Keine Datenträger gefunden.";
+    for (const [uuid, saved] of Object.entries(d.approved || {})) {
+      if (d.devices.some(disk => disk.uuid === uuid && disk.mountpoint)) continue;
+      const row = document.createElement("div"); row.className = "item";
+      const note = document.createElement("p"); note.textContent = "Freigegebener Speicher nicht verfügbar: " + saved.mountpoint + " (" + uuid + ")";
+      row.append(note, button("Freigabe widerrufen", "", async () => {
+        if (!confirm("Freigabe widerrufen?")) return;
+        try { await api("/api/storage/revoke", {uuid, confirmed:true}); await loadStorage(); }
+        catch(e) { showErr(e); }
+      }));
+      list.append(row);
+    }
+    if (!list.children.length) list.textContent="Keine Datenträger gefunden.";
   } catch(e) { list.textContent=e.message || String(e); }
 }
 $("storage-refresh").addEventListener("click",loadStorage);
