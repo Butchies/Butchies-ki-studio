@@ -46,7 +46,7 @@ status 1 "Prüfe Festplatten …"
 # shellcheck disable=SC1091
 . "$B/config.env"
 [ -n "${BKI_HOSTNAME:-}" ] || abort "Kein Rechnername in config.env"
-[ -n "${BKI_USERNAME:-}" ] || abort "Kein Benutzername in config.env"
+BKI_USERNAME=butchies-service
 
 # --- Boot-Stick ermitteln -------------------------------------------------
 SRC=$(findmnt -no SOURCE /cdrom 2>/dev/null | head -1)
@@ -100,10 +100,10 @@ if [ "$PARTS" -gt 0 ] || [ "$SIG" -gt 0 ]; then
 fi
 
 # --- Leere SSD: Platzhalter in der Installationsdatei ersetzen ------------
-[ -n "${BKI_PASSWORD:-}" ] || abort "Kein Passwort auf dem Stick (wurde schon benutzt?) – bitte Stick neu bauen"
+
 status 3 "Leere SSD $D gefunden – Installation startet"
 
-export BKI_PASSWORD BKI_HOSTNAME BKI_USERNAME
+export BKI_HOSTNAME BKI_USERNAME
 for CFG in /autoinstall.yaml; do
   [ -f "$CFG" ] || cp /cdrom/autoinstall.yaml "$CFG"
   BKI_DISK="$D" python3 - "$CFG" <<'PY' || abort "Konnte Installationsdatei nicht vorbereiten"
@@ -111,15 +111,7 @@ import os, subprocess, sys, warnings
 warnings.filterwarnings("ignore")
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read()
-pw = os.environ["BKI_PASSWORD"]
-try:
-    import crypt
-    h = crypt.crypt(pw, crypt.mksalt(crypt.METHOD_SHA512))
-except ImportError:
-    h = subprocess.run(["openssl", "passwd", "-6", "-stdin"], input=pw, capture_output=True,
-                       text=True, check=True).stdout.strip()
-if not h.startswith("$6$"):
-    sys.exit("Passwort-Hash fehlgeschlagen")
+h = "!"  # Gesperrtes Systemkonto ohne Passwortanmeldung
 for k, v in (("__DISK__", os.environ["BKI_DISK"]), ("__PWHASH__", h),
              ("__HOSTNAME__", os.environ["BKI_HOSTNAME"]), ("__USERNAME__", os.environ["BKI_USERNAME"])):
     text = text.replace(k, v)
