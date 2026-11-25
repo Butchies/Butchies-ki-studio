@@ -455,6 +455,41 @@ def storage_inventory():
     return devices
 
 
+def storage_expansion_plan(uid):
+    approved = (CONFIG.get("approved_storage") or {}).get(uid)
+    if not approved:
+        raise RuntimeError("Datenträger nicht freigegeben")
+    matches = [d for d in storage_inventory() if d.get("uuid") == uid
+               and d.get("mountpoint") and d["mountpoint"] != "/"
+               and not d.get("ro")]
+    if len(matches) != 1:
+        raise RuntimeError("Freigegebener Datenträger nicht eindeutig verfügbar")
+    disk = matches[0]
+    mount = os.path.realpath(disk["mountpoint"])
+    if not os.path.ismount(mount) or os.stat(mount).st_dev == os.stat(DATA_DIR).st_dev:
+        raise RuntimeError("Kein unabhängiger Zieldatenträger")
+    target = os.path.join(mount, "butchies-ki-data")
+    if os.path.lexists(target):
+        raise RuntimeError("Zielverzeichnis existiert bereits; keine Überschreibung")
+    needed = 0
+    count = 0
+    for root, dirs, files in os.walk(DATA_DIR, followlinks=False):
+        for name in dirs + files:
+            p = os.path.join(root, name)
+            if os.path.islink(p):
+                raise RuntimeError("Symbolische Verknüpfung im Datenbestand: " + p)
+        for name in files:
+            p = os.path.join(root, name)
+            if not os.path.isfile(p):
+                raise RuntimeError("Nicht reguläre Datei: " + p)
+            needed += os.path.getsize(p)
+            count += 1
+    available = storage_budget(mount)
+    return {"uuid": uid, "source": DATA_DIR, "target": target,
+            "bytes": needed, "files": count, "available": available,
+            "fits": needed <= available}
+
+
 def storage_budget(path):
     usage = shutil.disk_usage(path)
     return max(0, min(usage.free, usage.total * 9 // 10 - usage.used))
@@ -1613,6 +1648,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.error("Bitte anmelden", 401)
         ACTIVITY.touch()
 
+        if path == "/api/storage/plan":
+            try:
+                return self.send_json({"ok": True, "plan": storage_expansion_plan(str(data.get("uuid", "")))})
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                return self.error(str(exc))
         if path == "/api/storage/approve":
             if data.get("confirmed") is not True:
                 return self.error("Ausdrückliche Bestätigung erforderlich")
