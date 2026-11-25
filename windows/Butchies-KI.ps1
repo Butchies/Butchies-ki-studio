@@ -49,10 +49,10 @@ $sync = [hashtable]::Synchronized(@{
 $worker = {
   param($sync)
   $cookies = New-Object Net.CookieContainer
-  function Basis { if ($sync.Ip) { "http://$($sync.Ip)" } else { "http://$($sync.Host).local" } }
+  function Basis { if ($sync.Ip) { "http://$($sync.Ip)" } else { "http://$($sync.Host)" } }
   function Anfrage($method, $path, $body, $ms) {
     $result = @{ Code = 0; Text = "" }
-    foreach ($base in @((Basis), "http://$($sync.Host).local") | Select-Object -Unique) {
+    foreach ($base in @((Basis), "http://$($sync.Host)") | Select-Object -Unique) {
       try {
         $req = [Net.HttpWebRequest]::Create("$base$path")
         $req.Method = $method; $req.Timeout = $ms; $req.ReadWriteTimeout = $ms
@@ -151,7 +151,7 @@ function WindowsDesign {
   $lum = (0.2126 * $acc.R + 0.7152 * $acc.G + 0.0722 * $acc.B) / 255
   $hex = "#{0:X2}{1:X2}{2:X2}" -f $acc.R, $acc.G, $acc.B
   $t = if ($light) {
-    @{ Bg = "#F3F3F3"; Border = "#D9D9D9"; Card = "#FBFBFB"; CardBorder = "#E5E5E5"; Text = "#1A1A1A"; Sub = "#5C5C5C"; Track = "#D4D4D4"
+    @{ Bg = "#EDF5FC"; Border = "#B7D6F0"; Card = "#FFFFFF"; CardBorder = "#E5E5E5"; Text = "#1A1A1A"; Sub = "#5C5C5C"; Track = "#D4D4D4"
        Btn = "#FDFDFD"; BtnBorder = "#D1D1D1"; Ok = "#0F7B0F"; OkBg = "#DFF6DD"; Crit = "#C42B1C"; Sep = "#E5E5E5"; Input = "#FFFFFF"; Ram = "#3B8ED6" }
   } else {
     @{ Bg = "#2C2C2C"; Border = "#434343"; Card = "#363636"; CardBorder = "#3D3D3D"; Text = "#FFFFFF"; Sub = "#C5C5C5"; Track = "#4A4A4A"
@@ -241,7 +241,7 @@ $xamlVorlage = @'
     <Border.Effect><DropShadowEffect BlurRadius="16" ShadowDepth="3" Opacity="0.35"/></Border.Effect>
     <StackPanel>
       <DockPanel LastChildFill="True">
-<Border DockPanel.Dock="Left" Margin="0,0,12,0"><Viewbox Width="42" Height="42"><Canvas Width="100" Height="100"><Rectangle Canvas.Left="4" Canvas.Top="4" Width="92" Height="92" RadiusX="22" RadiusY="22" Fill="#0067C0"/><Path Data="M33,24 H53 C63,24 69,29 69,37 C69,42 66,46 62,47 C68,48 72,53 72,59 C72,68 65,74 54,74 H33 Z" Stroke="White" StrokeThickness="8" StrokeLineJoin="Round"/><Ellipse Canvas.Left="72.5" Canvas.Top="16.5" Width="11" Height="11" Fill="#9FD8FF"/><Line X1="69" Y1="31" X2="75" Y2="25" Stroke="#9FD8FF" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox></Border>
+<Border DockPanel.Dock="Left" Margin="0,0,12,0"><Viewbox Width="42" Height="42"><Canvas Width="100" Height="100"><Rectangle Canvas.Left="4" Canvas.Top="4" Width="92" Height="92" RadiusX="22" RadiusY="22" Fill="#2678C9"/><Path Data="M33,24 H53 C63,24 69,29 69,37 C69,42 66,46 62,47 C68,48 72,53 72,59 C72,68 65,74 54,74 H33 Z" Stroke="White" StrokeThickness="8" StrokeLineJoin="Round"/><Ellipse Canvas.Left="72.5" Canvas.Top="16.5" Width="11" Height="11" Fill="#9FD8FF"/><Line X1="69" Y1="31" X2="75" Y2="25" Stroke="#9FD8FF" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox></Border>
         <Border x:Name="Pill" DockPanel.Dock="Right" CornerRadius="10" Padding="10,3" VerticalAlignment="Center">
           <TextBlock x:Name="PillText" FontSize="12"/>
         </Border>
@@ -302,7 +302,7 @@ $xamlVorlage = @'
         <Grid Margin="0,8,0,0">
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
           <Button x:Name="BtnSave" Content="Speichern" Style="{StaticResource Primary}"/>
-          <Button x:Name="BtnForget" Grid.Column="2" Content="Passwort vergessen" Style="{StaticResource Btn}"/>
+          <Button x:Name="BtnForget" Grid.Column="2" Content="Lokale Anmeldung löschen" Style="{StaticResource Btn}"/>
         </Grid>
       </StackPanel>
 
@@ -334,7 +334,7 @@ function OeffneOberflaeche {
   $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   if ($edge) {
     $prof = Join-Path $cfgDir "edge-profil"
-    $origins = "http://$($sync.Host).local" + $(if ($sync.Ip) { ",http://$($sync.Ip)" } else { "" })
+    $origins = "http://$($sync.Host)" + $(if ($sync.Ip) { ",http://$($sync.Ip)" } else { "" })
     Start-Process $edge -ArgumentList "--app=$url", "--user-data-dir=`"$prof`"", "--window-size=1400,900", "--unsafely-treat-insecure-origin-as-secure=$origins"
   } else { Start-Process $url }
 }
@@ -366,7 +366,7 @@ function ZeigeFenster {
   })
   $n.BtnLogin.Add_Click({
     $pw = $script:win.Tag.N.Pw.Password
-    if ($pw.Length -lt 8) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 8 Zeichen."; return }
+    if ($pw.Length -lt 4) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 4 Zeichen."; return }
     $sync.Password = $pw; SpeicherePasswort $pw; $sync.State = "unbekannt"; $sync.Queue.Enqueue("login")
     $script:win.Tag.N.LoginMsg.Text = "Melde an …"
   })
@@ -446,7 +446,7 @@ function FensterAktualisieren {
       $n.Info.Text = "Schläft in ca. $rest Minute$(if ($rest -ne 1) { 'n' }), wenn du ihn nicht benutzt."
     } else { $n.Info.Text = "Ruhezustand ist ausgeschaltet." }
   } else {
-    $n.Sub.Text = "$($sync.Host).local"
+    $n.Sub.Text = "$($sync.Host)"
     $n.Info.Text = switch ($state) {
       "schlaeft" { if ($sync.LastSeen) { "Zuletzt wach: $($sync.LastSeen.ToString('HH:mm')) Uhr. »Aufwecken« oder »Oberfläche öffnen« weckt ihn." } else { "Nicht erreichbar – schläft er, oder ist er aus?" } }
       "anmelden" { "Einmal anmelden, dann zeigt das Fenster alle Werte." }
@@ -508,7 +508,7 @@ function Antwort($ctx, $text, $type) {
 }
 function Bearbeite($ctx) {
   $wach = $sync.State -in @("wach", "arbeitet", "problem", "anmelden")
-  $ui = "http://$($sync.Host).local/"
+  $ui = "http://$($sync.Host)/"
   switch ($ctx.Request.Url.AbsolutePath) {
     "/wake" { $sync.Queue.Enqueue("wake"); $sync.Fast = $true; Antwort $ctx '{"ok":true}' "application/json" }
     "/status" { Antwort $ctx (@{ awake = $wach; url = $ui; mac = $sync.Mac } | ConvertTo-Json -Compress) "application/json" }
