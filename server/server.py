@@ -70,7 +70,7 @@ def resolve_data_directory():
     return target
 
 
-DATA_DIR = "/var/lib/butchies-ki" if len(sys.argv) == 3 and sys.argv[1] == "--rollback-storage" else resolve_data_directory()
+DATA_DIR = "/var/lib/butchies-ki" if len(sys.argv) == 3 and sys.argv[1] in ("--rollback-storage", "--check-storage-start") else resolve_data_directory()
 MODEL_DIR = os.path.join(DATA_DIR, "models")
 LLAMA_DIR = os.path.join(DATA_DIR, "llama")
 CONFIG_PATH = os.path.join(ETC_DIR, "config.json")
@@ -1623,6 +1623,12 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
 
+        if path == "/api/local-readiness":
+            if self.client_address[0] != "127.0.0.1":
+                return self.error("Nur lokal verfügbar", 403)
+            return self.send_json({"ok": True, "model_configured": bool(CONFIG.get("active_model")),
+                                   "model_ready": LLAMA.healthy() if CONFIG.get("active_model") else False,
+                                   "model_state": LLAMA.state})
         if path == "/api/ping":
             return self.send_json({"ok": True, "name": "Butchies KI Studio", "version": VERSION},
                                   extra_headers={"Access-Control-Allow-Origin": "*"})
