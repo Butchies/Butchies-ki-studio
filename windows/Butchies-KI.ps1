@@ -302,7 +302,7 @@ $xamlVorlage = @'
         <Grid Margin="0,8,0,0">
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition/></Grid.ColumnDefinitions>
           <Button x:Name="BtnSave" Content="Speichern" Style="{StaticResource Primary}"/>
-          <Button x:Name="BtnForget" Grid.Column="2" Content="Lokale Anmeldung löschen" Style="{StaticResource Btn}"/>
+          <Button x:Name="BtnForget" Grid.Column="2" Content="Passwort vergessen" Style="{StaticResource Btn}"/>
         </Grid>
       </StackPanel>
 
@@ -382,7 +382,7 @@ function ZeigeFenster {
     AutostartSetzen ([bool]$script:win.Tag.N.AutoStart.IsChecked)
     $script:win.Tag.N.SettingsPanel.Visibility = "Collapsed"
   })
-  $n.BtnForget.Add_Click({ SpeicherePasswort ""; $sync.Password = ""; $sync.State = "anmelden"; $sync.Version++ })
+  $n.BtnForget.Add_Click({ SpeicherePasswort ""; $sync.Password = ""; $sync.State = "anmelden"; $sync.Version++; Start-Process "http://$($sync.Host)/" })
   $n.LinkQuit.Add_Click({ Beenden })
   $w.Add_Deactivated({ if ($script:win) { $script:win.Close() } })
   $w.Add_Closed({ $script:win = $null; $script:closedAt = Get-Date; $sync.Fast = $false })
