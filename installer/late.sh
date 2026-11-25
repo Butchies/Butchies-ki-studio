@@ -54,7 +54,25 @@ if [ -e /dev/disk/by-label/BKIMODELLE ]; then
   status 88 "Kopiere KI-Modelle vom Stick auf die SSD …"
   mkdir -p /mnt/bkimodelle "$T/var/lib/butchies-ki/models"
   if mount -o ro /dev/disk/by-label/BKIMODELLE /mnt/bkimodelle; then
-    cp -v /mnt/bkimodelle/models/*.gguf /mnt/bkimodelle/models/*.gguf.json "$T/var/lib/butchies-ki/models/" 2>/dev/null || true
+    for src in /mnt/bkimodelle/models/*.gguf; do
+      [ -f "$src" ] || continue
+      dst="$T/var/lib/butchies-ki/models/${src##*/}"
+      read -r total used avail < <(df -B1 --output=size,used,avail "$T/var/lib/butchies-ki/models" | tail -1)
+      bytes=$(stat -c %s "$src")
+      if (( used + bytes > total * 9 / 10 || bytes > avail )); then
+        echo "Modell übersprungen: Speichergrenze von 90 Prozent: $src"
+        continue
+      fi
+      if cp "$src" "$dst.partial" && cmp -s "$src" "$dst.partial"; then
+        mv "$dst.partial" "$dst"
+        if [ -f "$src.json" ]; then
+          cp "$src.json" "$dst.json"
+        fi
+      else
+        rm -f "$dst.partial"
+        echo "Modellkopie fehlgeschlagen: $src"
+      fi
+    done
     umount /mnt/bkimodelle
   fi
 fi
