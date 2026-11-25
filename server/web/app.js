@@ -864,9 +864,19 @@ async function openKnowledge() {
   const category=make("input");category.placeholder="Kategorie";category.value="Allgemein";
   const content=make("textarea");content.placeholder="Wissenseintrag";content.style.width="100%";
   const list=make("div");let editing=null;const selected=new Set();
+  const usageInfo=make("p"); const categoryInfo=make("div");
   async function load(){
     const result=await api("/api/knowledge/search",{query:query.value});
     selected.clear();list.replaceChildren();
+    try {
+      const usage=await api("/api/knowledge/usage",{});
+      const mib=n=>(n/1048576).toFixed(2)+" MiB";
+      usageInfo.textContent=usage.entries+" Einträge · Datenbank: "+mib(usage.database_bytes)+" · Sicherungen: "+mib(usage.backup_bytes);
+      categoryInfo.replaceChildren();
+      for(const [name,count] of Object.entries(usage.categories)){
+        categoryInfo.append(button(name+" ("+count+")",()=>{query.value=name;category.value=name;return load();}));
+      }
+    } catch(e){usageInfo.textContent="Speicherstatistik nicht verfügbar";}
     for(const entry of result.entries){
       const row=make("section");row.className="tile";
       const check=make("input");check.type="checkbox";check.onchange=()=>check.checked?selected.add(entry.id):selected.delete(entry.id);
@@ -914,7 +924,7 @@ async function openKnowledge() {
       alert(result.restored+" Wissenseinträge wiederhergestellt.");await load();
     }));
   d.append(file,button("JSON exportieren",()=>exportKnowledge()),button("Markdown exportieren",()=>exportKnowledge(true)),button("JSON importieren",()=>file.click()));
-  d.append(make("h2","Wissensbibliothek"),query,button("Suchen",load),category,content,
+  d.append(make("h2","Wissensbibliothek"),usageInfo,categoryInfo,query,button("Suchen",load),category,content,
     button("Speichern",async()=>{await api(editing===null?"/api/knowledge/add":"/api/knowledge/edit",{id:editing,category:category.value,content:content.value});editing=null;content.value="";await load();}),
     button("Neuer Eintrag",()=>{editing=null;content.value="";}),
     button("Auswahl löschen",()=>remove({ids:[...selected]})),
