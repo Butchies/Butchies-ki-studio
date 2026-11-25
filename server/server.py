@@ -809,6 +809,44 @@ def installed_models():
     return out
 
 
+TEAM_TEXT_ROLES = ("programming", "review", "analysis")
+
+
+def team_plan(messages):
+    """Ask the active text model which configured text specialists are needed."""
+    team = CONFIG.get("ai_team") or {}
+    if not team.get("enabled"):
+        return []
+    installed = {m["file"] for m in installed_models()}
+    roles = {role: model for role, model in (team.get("roles") or {}).items()
+             if role in TEAM_TEXT_ROLES and model in installed
+             and model != CONFIG.get("active_model")}
+    if not roles:
+        return []
+    prompt = [{"role": "system", "content":
+               "Select necessary specialist roles for the user task. Return only a JSON array of role names from: "
+               + ", ".join(roles) + ". Return [] if none are needed."}]
+    prompt.extend({"role": m["role"], "content": m["content"][:4000]}
+                  for m in messages[-6:] if isinstance(m, dict)
+                  and m.get("role") in ("user", "assistant") and isinstance(m.get("content"), str))
+    conn = http.client.HTTPConnection("127.0.0.1", LLAMA.port, timeout=90)
+    try:
+        conn.request("POST", "/v1/chat/completions",
+                     body=json.dumps({"messages": prompt, "stream": False, "temperature": 0, "max_tokens": 128}),
+                     headers={"Content-Type": "application/json"})
+        response = conn.getresponse()
+        if response.status != 200:
+            return []
+        selected = json.loads(json.loads(response.read())["choices"][0]["message"]["content"])
+        if not isinstance(selected, list):
+            return []
+        return [{"role": role, "model": roles[role]} for role in roles if role in selected]
+    except (OSError, ValueError, KeyError, IndexError, TypeError, http.client.HTTPException):
+        return []
+    finally:
+        conn.close()
+
+
 def model_meta(fn):
     """Katalog-Eintrag zu einer installierten Modelldatei (oder {})."""
     try:
