@@ -34,6 +34,7 @@ import socket
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import urllib.error
@@ -43,7 +44,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.19"
+VERSION = "0.4.20"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -639,7 +640,7 @@ def llama_version():
 LLAMA_RELEASES = "https://api.github.com/repos/ggml-org/llama.cpp/releases"
 
 
-def llama_release_asset(backend):
+def upstream_llama_release_asset(backend):
     platform = "ubuntu-vulkan-x64" if backend == "vulkan" else "ubuntu-x64"
     def matching_asset(release):
         tag = release.get("tag_name", "")
@@ -684,6 +685,24 @@ def llama_release_asset(backend):
     raise RuntimeError("Kein llama.cpp-Paket für %s in den offiziellen Builds gefunden" % platform)
 
 
+def llama_release_asset(backend):
+    if backend != "vulkan":
+        return upstream_llama_release_asset(backend)
+    try:
+        tag, asset = upstream_llama_release_asset(backend)
+        match = re.fullmatch(r"b([0-9]+)", tag)
+        if match and int(match[1]) >= 12621:
+            return tag, asset
+    except (OSError, RuntimeError):
+        pass
+    name = "llama-b12621-bin-ubuntu-vulkan-x64.tar.gz"
+    return "b12621", {
+        "name": name,
+        "browser_download_url": "https://github.com/ggml-org/llama.cpp/releases/download/b12621/" + name,
+        "digest": "sha256:9ebb8b43a6d76cc9f7bde23328cc223be413b38994e2a49a59c64759b90e3c6b",
+    }
+
+
 def missing_llama_dependencies():
     if DRYRUN:
         return []
@@ -704,11 +723,15 @@ def start_existing_llama():
     LLAMA.start()
 
 
-def install_llama(p_from=0, p_to=100):
+def install_llama(p_from=0, p_to=100, upgrade_only=False):
     ensure_llama_dependencies(p_from)
     backend = CONFIG.get("backend", "vulkan")
     JOB.progress(p_from, "Suche neueste KI-Laufzeit (llama.cpp, %s) …" % backend)
     tag, asset = llama_release_asset(backend)
+    installed = llama_version() if llama_binary() else ""
+    if upgrade_only and installed and not llama_upgrade_available(installed, tag):
+        JOB.progress(p_to, "Vorhandene KI-Laufzeit %s bleibt installiert." % installed)
+        return
     os.makedirs(LLAMA_DIR, exist_ok=True)
     archive = os.path.join(LLAMA_DIR, asset["name"])
     span = p_to - p_from
@@ -717,41 +740,49 @@ def install_llama(p_from=0, p_to=100):
         JOB.progress(p_from + span * 0.9 * frac, "llama.cpp %s: %s / %s" % (tag, gb(done), gb(total)))
 
     download(asset["browser_download_url"], archive, prog)
+    digest = asset.get("digest") or ""
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+        with open(archive, "rb") as f:
+            actual = hashlib.file_digest(f, "sha256").hexdigest()
+        if not hmac.compare_digest(digest[7:], actual):
+            os.unlink(archive)
+            raise RuntimeError("Prüfsumme des llama.cpp-Pakets stimmt nicht")
     JOB.progress(p_from + span * 0.92, "Entpacke llama.cpp …")
-    target = os.path.join(LLAMA_DIR, tag)
-    if os.path.isdir(target):
-        shutil.rmtree(target)
-    os.makedirs(target)
-    if archive.endswith(".zip"):
-        with zipfile.ZipFile(archive) as z:
-            z.extractall(target)
-    else:
-        with tarfile.open(archive) as t:
-            try:
-                t.extractall(target, filter="data")
-            except TypeError:
-                t.extractall(target)
-    os.remove(archive)
-    for root, _d, files in os.walk(target):
-        for fn in files:
-            if fn.startswith("llama-") or fn.endswith(".so") or ".so." in fn:
-                fp = os.path.join(root, fn)
-                os.chmod(fp, os.stat(fp).st_mode | 0o755)
-    with open(os.path.join(target, ".version"), "w") as f:
-        f.write(tag)
-    cur = os.path.join(LLAMA_DIR, "current")
-    tmp = cur + ".new"
-    if os.path.lexists(tmp):
-        os.remove(tmp)
-    os.symlink(target, tmp)
-    os.replace(tmp, cur)
-    # alte Versionen aufräumen
-    for d in os.listdir(LLAMA_DIR):
-        p = os.path.join(LLAMA_DIR, d)
-        if d not in (tag, "current") and os.path.isdir(p) and not os.path.islink(p):
-            shutil.rmtree(p, ignore_errors=True)
-    if not llama_binary():
-        raise RuntimeError("llama-server wurde im Paket nicht gefunden")
+    target = tempfile.mkdtemp(prefix=tag + ".", dir=LLAMA_DIR)
+    try:
+        if archive.endswith(".zip"):
+            with zipfile.ZipFile(archive) as z:
+                z.extractall(target)
+        else:
+            with tarfile.open(archive) as t:
+                try:
+                    t.extractall(target, filter="data")
+                except TypeError:
+                    t.extractall(target)
+        os.remove(archive)
+        for root, _d, files in os.walk(target):
+            for fn in files:
+                if fn.startswith("llama-") or fn.endswith(".so") or ".so." in fn:
+                    fp = os.path.join(root, fn)
+                    os.chmod(fp, os.stat(fp).st_mode | 0o755)
+        binary = find_file(target, ["llama-server"])
+        if not binary:
+            raise RuntimeError("llama-server wurde im Paket nicht gefunden")
+        check = subprocess.run([binary, "--version"], capture_output=True, text=True, timeout=30,
+                               env=dict(os.environ, LD_LIBRARY_PATH=os.path.dirname(binary)))
+        if check.returncode:
+            raise RuntimeError("Neue Laufzeit startet nicht: " + (check.stderr or check.stdout)[-500:])
+        with open(os.path.join(target, ".version"), "w") as f:
+            f.write(tag)
+        cur = os.path.join(LLAMA_DIR, "current")
+        link = target + ".link"
+        os.symlink(target, link)
+        os.replace(link, cur)
+    except Exception:
+        if os.path.lexists(target + ".link"):
+            os.unlink(target + ".link")
+        shutil.rmtree(target, ignore_errors=True)
+        raise
     log("KI-Laufzeit installiert: llama.cpp %s (%s)" % (tag, backend))
     JOB.progress(p_to, "llama.cpp %s bereit" % tag)
 
@@ -1046,7 +1077,7 @@ def update_all(include_llama):
     if include_llama:
         LLAMA.stop()
         try:
-            install_llama(78, 98)
+            install_llama(78, 98, upgrade_only=True)
         finally:
             LLAMA.restart()
     if os.path.exists("/var/run/reboot-required"):
@@ -1620,9 +1651,23 @@ def version_tuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", v or "0"))
 
 
+def llama_upgrade_available(installed, candidate):
+    if not candidate or installed == candidate:
+        return False
+    if not installed:
+        return True
+    old = re.fullmatch(r"b([0-9]+)", installed)
+    new = re.fullmatch(r"b([0-9]+)", candidate)
+    if old and new:
+        return int(new[1]) > int(old[1])
+    if re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", installed) and re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", candidate):
+        return version_tuple(candidate) > version_tuple(installed)
+    return False
+
+
 def updates_available():
     out = []
-    if UPDATE_INFO["llama_latest"] and llama_version() and UPDATE_INFO["llama_latest"] != llama_version():
+    if llama_version() and llama_upgrade_available(llama_version(), UPDATE_INFO["llama_latest"]):
         out.append("KI-Laufzeit")
     if UPDATE_INFO["app_latest"] and version_tuple(UPDATE_INFO["app_latest"]) > version_tuple(VERSION):
         out.append("Butchies KI Studio " + UPDATE_INFO["app_latest"])

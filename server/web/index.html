@@ -37,8 +37,15 @@
 
 <div id="app" class="app" hidden>
   <header class="topbar">
-    <div class="brand"><span class="logo" aria-hidden="true"></span>Butchies KI Studio <span class="accent">Offline</span></div>
+    <div class="brand"><span class="logo" aria-hidden="true"></span>Butchies KI Studio 5.0</div>
+    <nav class="studio-nav" aria-label="Hauptmenü">
+      <button class="nav active" data-view="chat" type="button">Chat</button>
+      <button class="nav" data-view="models" type="button">Modelle</button>
+      <button class="nav" data-view="system" type="button">Server</button>
+      <button class="nav" data-view="settings" type="button">Einstellungen</button>
+    </nav>
     <div class="topbar-right">
+      <span class="studio-host" id="studio-host" title="Studio-Adresse"></span>
       <span class="pill ok" id="llama-pill">KI: …</span>
       <button class="btn primary small" id="ki-setup-shortcut" type="button" hidden>KI einrichten</button>
       <button class="btn ghost small" id="logout-btn" type="button">Abmelden</button>
@@ -57,20 +64,30 @@
   </div>
 
   <div class="layout">
-    <nav class="sidebar" aria-label="Hauptmenü">
-      <button class="nav active" data-view="chat" type="button">Chat</button>
-      <button class="nav" data-view="images" type="button" id="nav-images" hidden>Bilder</button>
-      <button class="nav" data-view="models" type="button">Modelle</button>
-      <button class="nav" data-view="ext" type="button">Erweiterungen</button>
-      <button class="nav" data-view="system" type="button">System</button>
-      <button class="nav" data-view="settings" type="button">Einstellungen</button>
-      <div class="side-title">Verlauf</div>
+    <nav class="sidebar" aria-label="Chatverlauf und Werkzeuge">
+      <button class="btn primary" id="new-chat" type="button">＋ Neuer Chat</button>
+      <div class="side-title">Chatverlauf</div>
       <div id="history" class="history"></div>
-      <button class="btn dashed" id="new-chat" type="button">+ Neuer Chat</button>
+      <div class="studio-tools">
+        <button class="nav" data-view="images" type="button" id="nav-images" hidden>Bilder</button>
+        <button class="nav" data-view="ext" type="button">Erweiterungen</button>
+        <button class="nav" data-view="models" type="button">Modelle</button>
+        <button class="nav" data-view="settings" type="button">Einstellungen</button>
+      </div>
     </nav>
 
     <!-- Chat -->
     <main class="view" id="view-chat">
+      <section class="studio-welcome" id="studio-welcome" hidden>
+        <h1>Willkommen im<br>Butchies KI Studio 5.0</h1>
+        <p>Dein persönlicher KI-Assistent auf dem eigenen Server.</p>
+        <div class="studio-shortcuts">
+          <button class="studio-card" type="button" id="focus-chat"><strong>Chatten</strong><span>Mit deinen KI-Modellen</span></button>
+          <button class="studio-card nav" type="button" data-view="models"><strong>Modelle</strong><span>Verwalten und laden</span></button>
+          <button class="studio-card nav" type="button" data-view="system"><strong>Server</strong><span>Überwachen und steuern</span></button>
+          <button class="studio-card nav" type="button" data-view="settings"><strong>Einstellungen</strong><span>Studio anpassen</span></button>
+        </div>
+      </section>
       <div id="messages" class="messages" aria-live="polite"></div>
       <form id="composer" class="composer">
         <details class="chat-workspace">
@@ -97,6 +114,8 @@
           <button class="btn ghost small" type="button" id="mic-btn" hidden>Diktieren</button>
           <input type="file" id="audio-file" hidden accept="audio/*">
           <button class="btn ghost small" type="button" id="stop-btn" hidden>Stopp</button>
+          <label class="sr" for="chat-model">Aktives Modell</label>
+          <select id="chat-model" title="Aktives Modell" disabled><option value="">Modell wählen</option></select>
           <button class="btn primary" type="submit" id="send-btn">Senden</button>
         </div>
       </form>
@@ -335,14 +354,21 @@
     </main>
 
     <aside class="statuspanel" aria-label="Systemstatus">
-      <h2>Mini-PC</h2>
+      <h2>Serverstatus</h2>
+      <p id="studio-online" class="studio-online" role="status">Verbindung wird geprüft</p>
       <div class="meter"><div class="meter-head"><span>Arbeitsspeicher</span><span id="p-ram"></span></div><div class="bar"><div id="pb-ram" class="fill teal"></div></div></div>
       <div class="meter"><div class="meter-head"><span>Prozessor</span><span id="p-cpu"></span></div><div class="bar"><div id="pb-cpu" class="fill"></div></div></div>
+      <div class="meter"><div class="meter-head"><span>SSD</span><span id="p-disk">–</span></div><div class="bar"><div id="pb-disk" class="fill teal"></div></div></div>
+      <div class="meter"><div class="meter-head"><span>Temperatur</span><span id="p-temp">–</span></div></div>
       <div class="tiles">
         <div class="tile"><span class="muted small">Tempo</span><strong id="p-tps">–</strong></div>
         <div class="tile"><span class="muted small">Modell</span><strong id="p-model" class="small-strong">–</strong></div>
       </div>
       <p class="muted small" id="p-sleep"></p>
+      <div class="studio-server-actions">
+        <button class="btn" type="button" data-sys="reboot">Server neu starten</button>
+        <button class="btn" type="button" data-sys="shutdown">Server herunterfahren</button>
+      </div>
     </aside>
   </div>
 </div>

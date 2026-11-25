@@ -108,6 +108,7 @@ $("logout-btn").addEventListener("click", async () => {
 document.querySelectorAll(".nav").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 function setView(v) {
   state.view = v;
+  $("app").dataset.view = v;
   document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
   ["chat", "models", "system", "settings", "ext", "images"].forEach((n) => { $("view-" + n).hidden = n !== v; });
   if (v === "models") loadModels();
@@ -115,7 +116,7 @@ function setView(v) {
   if (v === "images") loadImages();
   if (v === "system") { loadUpdates(); loadLogs(); }
   if (v === "settings") { loadSettings(); loadWorkspace(); }
-  if (v === "chat") loadWorkspace();
+  if (v === "chat") { loadWorkspace(); refreshChatModels(); }
 }
 
 // ---------------------------------------------------------------- Status
@@ -189,6 +190,13 @@ function renderStatus(s) {
   }
   state.lastJob = s.job;
 
+  $("studio-online").textContent = "Server online";
+  $("studio-online").classList.add("connected");
+  const diskFraction = s.disk_total > 0 ? s.disk_used / s.disk_total : 0;
+  $("p-disk").textContent = Math.round(diskFraction * 100) + " %";
+  setBar("pb-disk", diskFraction);
+  $("p-temp").textContent = s.temp == null ? "–" : s.temp + " °C";
+  if (state.loadedChatModel !== s.llama.model && !state.switchingChatModel && state.view === "chat") refreshChatModels();
   const ram = fmtGB(s.mem_used) + " / " + fmtGB(s.mem_total);
   $("p-ram").textContent = ram; setBar("pb-ram", s.mem_used / s.mem_total);
   $("p-cpu").textContent = s.cpu + " %"; setBar("pb-cpu", s.cpu / 100);
@@ -215,7 +223,11 @@ function renderStatus(s) {
 }
 
 async function pollStatus() {
-  try { renderStatus(await api("/api/status")); } catch (e) { /* offline / schläft */ }
+  try { renderStatus(await api("/api/status")); }
+  catch (e) {
+    $("studio-online").textContent = "Serverstatus nicht verfügbar";
+    $("studio-online").classList.remove("connected");
+  }
 }
 
 // ---------------------------------------------------------------- Markdown (klein)
@@ -318,14 +330,26 @@ function currentChat() { return state.chats.find((c) => c.id === state.current);
 
 function newChat() {
   state.current = null;
+  setView("chat");
   renderMessages(); renderHistory();
   $("input").focus();
 }
 $("new-chat").addEventListener("click", newChat);
 
 function renderHistory() {
-  const box = $("history"); box.innerHTML = "";
+  const box = $("history"); box.replaceChildren();
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+  const week = new Date(today); week.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const sections = new Map();
   state.chats.forEach((c) => {
+    const date = parseInt(c.id, 36);
+    const label = date >= +today ? "Heute" : date >= +yesterday ? "Gestern" : date >= +week ? "Diese Woche" : "Älter";
+    if (!sections.has(label)) {
+      const group = document.createElement("div");
+      const title = document.createElement("h3"); title.textContent = label; title.className = "history-date";
+      group.appendChild(title); box.appendChild(group); sections.set(label, group);
+    }
     const row = document.createElement("div"); row.className = "hist" + (c.id === state.current ? " active" : "");
     const open = document.createElement("button"); open.type = "button"; open.className = "open"; open.textContent = c.title;
     open.addEventListener("click", () => { state.current = c.id; setView("chat"); renderMessages(); renderHistory(); });
@@ -336,7 +360,7 @@ function renderHistory() {
       if (state.current === c.id) state.current = null;
       saveChats(); renderHistory(); renderMessages();
     });
-    row.append(open, del); box.appendChild(row);
+    row.append(open, del); sections.get(label).appendChild(row);
   });
 }
 
@@ -402,13 +426,42 @@ function renderMessages() {
   const box = $("messages"); box.innerHTML = "";
   const c = currentChat();
   renderWorkspacePicker();
-  if (!c || !c.messages.length) {
-    box.innerHTML = '<div class="empty"><h1>Was soll ich für dich tun?</h1><p>Frag nach Code, lass dir Fehler erklären oder füge eine Textdatei ein. Alles bleibt auf deinem Mini-PC.</p></div>';
-    return;
-  }
+  const empty = !c || !c.messages.length;
+  $("app").classList.toggle("chat-home", empty);
+  $("studio-welcome").hidden = !empty;
+  box.hidden = empty;
+  if (empty) return;
   c.messages.forEach((m) => box.appendChild(messageEl(m)));
   box.scrollTop = box.scrollHeight;
 }
+
+$("focus-chat").addEventListener("click", () => $("input").focus());
+$("studio-host").textContent = location.origin;
+
+async function refreshChatModels() {
+  if (state.loadingChatModels || state.switchingChatModel) return;
+  state.loadingChatModels = true;
+  try {
+    const { installed } = await api("/api/models");
+    const select = $("chat-model");
+    select.replaceChildren(...installed.map((model) => new Option(model.name || model.file, model.file, false, model.active)));
+    if (!installed.length) select.add(new Option("Kein Modell installiert", ""));
+    select.disabled = !installed.length || !!state.streaming;
+    state.loadedChatModel = state.status?.llama.model;
+  } catch (error) { $("chat-model").disabled = true; }
+  finally { state.loadingChatModels = false; }
+}
+$("chat-model").addEventListener("change", async () => {
+  const select = $("chat-model");
+  if (!select.value || state.streaming) return;
+  state.switchingChatModel = true;
+  select.disabled = true;
+  try {
+    await api("/api/models/activate", { file: select.value });
+    await pollStatus();
+  } catch (error) { showErr(error); }
+  finally { state.switchingChatModel = false; refreshChatModels(); }
+});
 
 $("input").addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
@@ -454,7 +507,7 @@ $("composer").addEventListener("submit", async (e) => {
   live.classList.add("cursor");
   const ctrl = new AbortController(); state.streaming = ctrl;
   state.lastUsage = null; $("token-last").disabled = true;
-  $("send-btn").disabled = true; $("stop-btn").hidden = false;
+  $("send-btn").disabled = true; $("chat-model").disabled = true; $("stop-btn").hidden = false;
   try {
     const r = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
@@ -499,7 +552,7 @@ $("composer").addEventListener("submit", async (e) => {
   } finally {
     delete bot.pending;
     state.streaming = null; $("stop-btn").hidden = true;
-    saveChats(); renderMessages(); pollStatus();
+    saveChats(); renderMessages(); refreshChatModels(); pollStatus();
   }
 });
 
