@@ -433,6 +433,28 @@ def http_json(url, timeout=30):
         return json.loads(r.read().decode("utf-8"))
 
 
+def storage_inventory():
+    """Read-only inventory; never mounts or formats a device."""
+    raw = subprocess.check_output(["lsblk", "--json", "--bytes", "-o",
+        "NAME,PATH,TYPE,SIZE,FSTYPE,MOUNTPOINT,UUID,RO,RM"], timeout=8)
+    devices = []
+    def walk(nodes):
+        for node in nodes:
+            if node.get("type") in ("disk", "part", "lvm", "crypt"):
+                item = {k: node.get(k) for k in ("name", "path", "type", "size", "fstype", "mountpoint", "uuid", "ro", "rm")}
+                mount = item["mountpoint"]
+                if mount and os.path.isdir(mount):
+                    try:
+                        usage = shutil.disk_usage(mount)
+                        item.update(total=usage.total, used=usage.used, available=storage_budget(mount))
+                    except OSError:
+                        pass
+                devices.append(item)
+            walk(node.get("children") or [])
+    walk(json.loads(raw).get("blockdevices") or [])
+    return devices
+
+
 def storage_budget(path):
     usage = shutil.disk_usage(path)
     return max(0, min(usage.free, usage.total * 9 // 10 - usage.used))
@@ -1494,9 +1516,14 @@ class Handler(BaseHTTPRequestHandler):
                 "ext": {e["id"]: ext_installed(e["id"]) for e in EXTENSIONS},
                 "vision": VISION.state,
             })
+        if path == "/api/storage":
+            try:
+                return self.send_json({"ok": True, "limit_percent": 90, "devices": storage_inventory()})
+            except (OSError, subprocess.SubprocessError, ValueError) as exc:
+                return self.error("Datenträgerabfrage fehlgeschlagen: " + str(exc), 503)
         if path == "/api/models":
             return self.send_json({"ok": True, "catalog": CATALOG, "installed": installed_models(),
-                                   "free": shutil.disk_usage(DATA_DIR if os.path.isdir(DATA_DIR) else "/").free})
+                                   "free": storage_budget(MODEL_DIR if os.path.isdir(MODEL_DIR) else DATA_DIR if os.path.isdir(DATA_DIR) else "/")})
         if path == "/api/settings":
             cfg = {k: v for k, v in CONFIG.items() if k not in ("ui_password", "github_token")}
             cfg["github_token_set"] = bool(CONFIG.get("github_token"))
