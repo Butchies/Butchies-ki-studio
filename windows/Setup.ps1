@@ -473,25 +473,27 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
 }
 
 "follow" {
-  # Installation des Mini-PCs live mitverfolgen
   $h = $sync.Choice.Host; if (-not $h) { $h = "butchies-ki" }
-  $phase = "setup"
+  $client = New-Object Net.WebClient
+  $sync.Follow = @{ Phase = "Serversuche"; Percent = 0; Text = "Suche Mini-PC"; State = "wait" }
   while (-not $sync.StopFollow) {
-    $t = $null
-    try {
-      if ($phase -eq "setup") {
-        $t = (GetText "http://butchies-ki-setup.local/status.json") | ConvertFrom-Json
-        $sync.Follow = @{ Phase = "Installation"; Percent = [int]$t.percent; Text = $t.text; State = $t.state }
-        if ($t.state -eq "fertig" -or $t.percent -ge 99) { $phase = "ki" }
-      } else {
-        $t = (GetText "http://$h/api/state") | ConvertFrom-Json
-        $j = $t.job
-        if ($j.running) { $sync.Follow = @{ Phase = "Ersteinrichtung (KI laden)"; Percent = [int]$j.percent; Text = $j.text; State = "running" } }
-        else { $sync.Follow = @{ Phase = "Fertig"; Percent = 100; Text = "Mini-PC ist bereit: http://$h"; State = "fertig" } }
-      }
-    } catch {
-      if (-not $sync.Follow) { $sync.Follow = @{ Phase = "Warte auf Mini-PC"; Percent = 0; Text = "Mini-PC einschalten – er meldet sich hier, sobald die Installation läuft."; State = "wait" } }
-      elseif ($phase -eq "ki" -and $sync.Follow.Phase -ne "Fertig") { $sync.Follow = @{ Phase = "Neustart"; Percent = 100; Text = "Mini-PC startet neu …"; State = "running" } }
+    foreach ($url in @("http://$h/api/state", "http://$h.local/api/state", "http://butchies-ki-setup.local/status.json")) {
+      if ($sync.StopFollow) { break }
+      try {
+        $req = [Net.HttpWebRequest]::Create($url)
+        $req.Timeout = 2000; $req.ReadWriteTimeout = 2000
+        $resp = $req.GetResponse()
+        try { $reader = New-Object IO.StreamReader($resp.GetResponseStream()); $t = $reader.ReadToEnd() | ConvertFrom-Json } finally { $resp.Close() }
+        if ($url.EndsWith("/api/state") -and $null -ne $t.needs_password) {
+          $j = $t.job
+          if ($j.running) { $sync.Follow = @{ Phase = "KI-Ersteinrichtung"; Percent = [int]$j.percent; Text = $j.text; State = "running" } }
+          else { $sync.Follow = @{ Phase = "Server erreichbar"; Percent = 100; Text = "http://$h"; State = "fertig" } }
+        } elseif ($url.EndsWith("/status.json") -and $null -ne $t.percent) {
+          $sync.Follow = @{ Phase = "Installation"; Percent = [int]$t.percent; Text = $t.text; State = $t.state }
+        } else { throw "Unbekannte Serverantwort" }
+        [void]$sync.Log.Add(("{0:HH:mm:ss} OK {1} | {2}" -f (Get-Date), $url, $sync.Follow.Text))
+        break
+      } catch { [void]$sync.Log.Add(("{0:HH:mm:ss} {1} | {2}" -f (Get-Date), $url, $_.Exception.Message)) }
     }
     Ping
     Start-Sleep -Seconds 3
@@ -666,6 +668,7 @@ $xaml = @'
             <DockPanel><TextBlock DockPanel.Dock="Right" x:Name="FPct" FontSize="22" FontWeight="SemiBold" Foreground="#2678C9"/><TextBlock x:Name="FPhase" FontWeight="SemiBold" VerticalAlignment="Center" Text="Mini-PC live"/></DockPanel>
             <UniformGrid x:Name="FBlocks" Columns="20" Height="10" Margin="0,8,0,6"/>
             <TextBlock x:Name="FText" Foreground="#5C5C5C" TextWrapping="Wrap"/>
+            <TextBox x:Name="FConsole" Height="110" Margin="0,8,0,0" IsReadOnly="True" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="11" Background="#EDF5FC" TextWrapping="Wrap"/>
           </StackPanel>
         </Border>
       </StackPanel>
@@ -691,7 +694,7 @@ try { $w.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([IO.MemoryStream]::n
 $ui = @{}
 foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
   "PgUsb", "RbHave", "RbNew", "DiskList", "BtnRescan", "UsbInfo", "PgKi", "KiListInfo", "BtnCustom", "CustomUrl", "RbLater", "RbStick", "KiSum", "KiList",
-  "PgStick", "StickTitle", "StickSub", "TbHost", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText",
+  "PgStick", "StickTitle", "StickSub", "TbHost", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText", "FConsole",
   "ErrText", "BtnLog", "BtnBack", "BtnNext") { $ui[$n] = $w.FindName($n) }
 
 function Brush($c) { (New-Object Windows.Media.BrushConverter).ConvertFromString($c) }
@@ -994,6 +997,7 @@ $timer.Add_Tick({
   if ($script:step -eq 8 -and $sync.Follow) {
     $f = $sync.Follow
     $ui.FPhase.Text = "Mini-PC: $($f.Phase)"; $ui.FPct.Text = "$($f.Percent) %"; $ui.FText.Text = $f.Text; SetBlocks $ui.FBlocks $f.Percent
+    $ui.FConsole.Text = ($sync.Log | Select-Object -Last 100) -join "`n"; $ui.FConsole.ScrollToEnd()
   }
 })
 $timer.Start()
