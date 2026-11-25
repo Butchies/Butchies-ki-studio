@@ -1014,6 +1014,7 @@ LLAMA = Llama()
 VISION = Llama(port=8082, kind="vision")
 TEAM_ENGINE = Llama(port=8083, kind="team")
 TEAM_LOCK = threading.Lock()
+CHAT_LOCK = threading.Lock()
 
 
 def team_specialist_response(model, role, messages):
@@ -2131,6 +2132,15 @@ class Handler(BaseHTTPRequestHandler):
 
     # --- Chat (Streaming an llama-server weiterreichen) --------------------
     def chat(self, data):
+        if not CHAT_LOCK.acquire(blocking=False):
+            return self.error("Eine andere Chatanfrage wird bereits bearbeitet", 409)
+        try:
+            with ACTIVITY:
+                return self.chat_locked(data)
+        finally:
+            CHAT_LOCK.release()
+
+    def chat_locked(self, data):
         msgs = data.get("messages") or []
         if not isinstance(msgs, list) or not msgs:
             return self.error("Keine Nachricht")
