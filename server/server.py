@@ -1933,6 +1933,30 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "message": "Verlagerung beauftragt; Server wird neu gestartet"})
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 return self.error(str(exc))
+        if path in ("/api/knowledge/edit", "/api/knowledge/delete"):
+            from contextlib import closing
+            ids = data.get("ids", [])
+            if path.endswith("/edit"):
+                uid = data.get("id")
+                category, content = data.get("category"), data.get("content")
+                if type(uid) is not int or not isinstance(category, str) or not isinstance(content, str) or not content.strip() or len(category)>100 or len(content)>32000:
+                    return self.error("Ungültiger Wissenseintrag")
+                require_storage(DATA_DIR, 262144 + len(content.encode("utf-8")) * 4)
+                with closing(knowledge_db()) as db, db:
+                    count = db.execute("UPDATE memories SET category=?,content=? WHERE id=?", (category,content.strip(),uid)).rowcount
+            else:
+                if data.get("confirmed") is not True:
+                    return self.error("Löschen muss bestätigt werden")
+                with closing(knowledge_db()) as db, db:
+                    if data.get("all") is True:
+                        count = db.execute("DELETE FROM memories").rowcount
+                    elif isinstance(data.get("category"), str):
+                        count = db.execute("DELETE FROM memories WHERE category=?", (data["category"],)).rowcount
+                    elif isinstance(ids,list) and 0<len(ids)<=500 and all(type(i) is int for i in ids):
+                        count = db.execute("DELETE FROM memories WHERE id IN (" + ",".join("?" for _ in ids) + ")", ids).rowcount
+                    else:
+                        return self.error("Keine gültige Auswahl")
+            return self.send_json({"ok": True, "affected": count})
         if path == "/api/knowledge/add":
             try:
                 return self.send_json({"ok": True, "id": knowledge_add(data.get("category", "Allgemein"), data.get("content"))})
