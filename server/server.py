@@ -1538,8 +1538,8 @@ class Handler(BaseHTTPRequestHandler):
             if CONFIG.get("ui_password"):
                 return self.error("Passwort ist schon gesetzt", 403)
             pw = str(data.get("password", ""))
-            if len(pw) < 8:
-                return self.error("Das Passwort braucht mindestens 8 Zeichen")
+            if len(pw) < 4:
+                return self.error("Das Passwort braucht mindestens 4 Zeichen")
             username = str(data.get("username", "")).strip()
             if not username or len(username) > 64:
                 return self.error("Bitte gültigen Benutzernamen eingeben")
@@ -1632,8 +1632,8 @@ class Handler(BaseHTTPRequestHandler):
             new = str(data.get("new", ""))
             if not check_password(str(data.get("old", ""))):
                 return self.error("Altes Passwort stimmt nicht", 403)
-            if len(new) < 8:
-                return self.error("Das neue Passwort braucht mindestens 8 Zeichen")
+            if len(new) < 4:
+                return self.error("Das neue Passwort braucht mindestens 4 Zeichen")
             CONFIG["ui_password"] = hash_password(new)
             save_config(CONFIG)
             if data.get("linux"):
