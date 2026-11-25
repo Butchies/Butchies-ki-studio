@@ -883,6 +883,17 @@ def knowledge_backup_thread():
         time.sleep(3600)
 
 
+def record_token_usage(model, role, prompt, completion, seconds):
+    import sqlite3
+    from contextlib import closing
+    require_storage(DATA_DIR, 262144)
+    folder = os.path.join(DATA_DIR, "statistics")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    with closing(sqlite3.connect(os.path.join(folder,"tokens.sqlite3"),timeout=15)) as db, db:
+        db.execute("CREATE TABLE IF NOT EXISTS usage (created REAL, model TEXT, role TEXT, input_tokens INTEGER, output_tokens INTEGER, seconds REAL)")
+        db.execute("INSERT INTO usage VALUES (?,?,?,?,?,?)", (time.time(),str(model),role,max(0,int(prompt)),max(0,int(completion)),max(0,float(seconds))))
+
+
 def knowledge_db():
     import sqlite3
     folder = os.path.join(DATA_DIR, "knowledge")
@@ -2390,6 +2401,8 @@ class Handler(BaseHTTPRequestHandler):
                     return self.error("Hauptmodell nach Teamarbeit nicht bereit", 503)
                 time.sleep(2)
         meta = model_meta(CONFIG.get("active_model", "")) if not has_images else {}
+        usage_started = time.monotonic()
+        usage_recorded = False
         payload = {
             "messages": clean, "stream": True,
             "temperature": meta.get("temperature", 0.7),
@@ -2419,6 +2432,12 @@ class Handler(BaseHTTPRequestHandler):
                     if b'"timings"' in line:
                         try:
                             t = json.loads(line.decode("utf-8")[5:]).get("timings", {})
+                            if not usage_recorded and "prompt_n" in t and "predicted_n" in t:
+                                usage_recorded = True
+                                try:
+                                    record_token_usage(CONFIG.get("active_model","") if not has_images else "vision", "main", t["prompt_n"], t["predicted_n"], time.monotonic()-usage_started)
+                                except Exception as exc:
+                                    log("Tokenstatistik: " + str(exc))
                             if t.get("predicted_per_second"):
                                 LLAMA.last_tps = round(t["predicted_per_second"], 1)
                         except ValueError:
