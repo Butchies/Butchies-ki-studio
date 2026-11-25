@@ -61,9 +61,9 @@ $("gate-form").addEventListener("submit", async (e) => {
   try {
     if (gateSetup) {
       if (pw !== $("gate-pw2").value) throw new Error("Die Passwörter sind nicht gleich.");
-      await api("/api/setup", { password: pw });
+      await api("/api/setup", { username: $("gate-user").value.trim(), password: pw });
     } else {
-      await api("/api/login", { password: pw });
+      await api("/api/login", { username: $("gate-user").value.trim(), password: pw });
     }
     $("gate-pw").value = ""; $("gate-pw2").value = "";
     startApp();
