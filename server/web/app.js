@@ -147,6 +147,7 @@ function setBar(id, frac) { $(id).style.width = Math.round(Math.max(0, Math.min(
 
 function renderStatus(s) {
   state.status = s;
+  $("chat-web-panel").hidden = !s.web_search_available;
   renderJob(s.job);
   const pill = $("llama-pill");
   const ls = s.llama.state;
@@ -340,6 +341,25 @@ function messageEl(m) {
   } else {
     if (m.think) { const t = document.createElement("details"); const s = document.createElement("summary"); s.textContent = "Gedanken der KI"; const p = document.createElement("div"); p.className = "think"; p.textContent = m.think; t.append(s, p); d.appendChild(t); }
     const body = document.createElement("div"); body.className = "answer-content"; renderMarkdown(m.content || "", body); d.appendChild(body);
+    if (Array.isArray(m.sources)) {
+      const sources = document.createElement("details"); sources.className = "web-sources";
+      const heading = document.createElement("summary");
+      heading.textContent = m.sources.length ? "Webquellen (" + m.sources.length + ")" : "Keine Webtreffer";
+      sources.appendChild(heading);
+      const list = document.createElement("ol");
+      for (const source of m.sources) {
+        try {
+          const url = new URL(source.url);
+          if (!["https:", "http:"].includes(url.protocol)) continue;
+          const link = document.createElement("a");
+          link.href = url.href; link.target = "_blank"; link.rel = "noopener noreferrer";
+          link.textContent = source.title || url.hostname;
+          const row = document.createElement("li"); row.appendChild(link); list.appendChild(row);
+        } catch (error) { /* Ungültige Quellenadresse */ }
+      }
+      if (list.children.length) sources.appendChild(list);
+      d.appendChild(sources);
+    }
     if (m.content && !state.streaming) {
       const tools = document.createElement("div"); tools.className = "bot-tools";
       const copy = button("Antwort kopieren", "small", () => copyText(m.content, copy, "Antwort kopieren"));
@@ -386,6 +406,7 @@ $("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
   const text = $("input").value.trim();
   const imgs = state.pendingImages || [];
+  const webQuery = $("chat-web-panel").hidden ? "" : $("chat-web-query").value.trim();
   if ((!text && !imgs.length) || state.streaming) return;
   let c = currentChat();
   if (!c) {
@@ -413,9 +434,10 @@ $("composer").addEventListener("submit", async (e) => {
   try {
     const r = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
-      body: JSON.stringify({ ...c.workspace, messages: c.messages.slice(0, -1).map((m) => (m.images ? { role: m.role, content: m.content, images: m.images } : { role: m.role, content: m.content })) }),
+      body: JSON.stringify({ ...c.workspace, web_query: webQuery, messages: c.messages.slice(0, -1).map((m) => (m.images ? { role: m.role, content: m.content, images: m.images } : { role: m.role, content: m.content })) }),
     });
     if (!r.ok) { let d = {}; try { d = await r.json(); } catch (x) { /* */ } throw new Error(d.error || "Fehler " + r.status); }
+    if (webQuery === $("chat-web-query").value.trim()) $("chat-web-query").value = "";
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = ""; let last = 0;
     for (;;) {
       const { value, done } = await reader.read();
@@ -429,6 +451,7 @@ $("composer").addEventListener("submit", async (e) => {
         if (payload === "[DONE]") continue;
         try {
           const j = JSON.parse(payload);
+          if (Array.isArray(j.studio_sources)) bot.sources = j.studio_sources;
           const usage = j.usage;
           if (usage && Number.isInteger(usage.prompt_tokens) && Number.isInteger(usage.completion_tokens)) {
             state.lastUsage = [usage.prompt_tokens, usage.completion_tokens];
@@ -631,6 +654,7 @@ function openSettingsSection(section) {
   $("token-form").hidden = section !== "tokens";
   $("pw-form").hidden = section !== "password";
   $("connection-panel").hidden = section !== "connection";
+  $("web-search-settings").hidden = section !== "web-search";
   $("ki-setup-panel").hidden = section !== "setup";
   if (section === "setup") loadSetupModels();
   if (!editor) return;
@@ -725,8 +749,22 @@ async function loadSettings() {
     $("s-repo").value = s.update_repo || ""; $("s-token").value = "";
     $("s-token").placeholder = s.github_token_set ? "gesetzt – leer lassen = unverändert" : "nicht gesetzt";
     $("connection-host").textContent = location.host;
+    $("web-search-enabled").checked = !!s.web_search_enabled;
+    $("web-search-key").placeholder = s.brave_search_key_set ? "Gespeichert" : "Nicht gesetzt";
   } catch (e) { showErr(e); }
 }
+$("web-search-settings").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await api("/api/settings/web-search", { enabled: $("web-search-enabled").checked,
+      key: $("web-search-key").value.trim(), clear: $("web-search-clear").checked });
+    $("web-search-key").value = "";
+    $("web-search-clear").checked = false;
+    $("web-search-msg").textContent = "Gespeichert.";
+    await loadSettings();
+    await pollStatus();
+  } catch (error) { $("web-search-msg").textContent = error.message; }
+});
 $("settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
   try {

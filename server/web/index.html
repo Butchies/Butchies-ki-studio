@@ -78,6 +78,11 @@
           <label for="chat-bot">KI-Bot</label>
           <select id="chat-bot"><option value="">Allgemein</option></select>
           <div id="chat-sources"></div>
+          <div id="chat-web-panel" hidden>
+            <label for="chat-web-query">Web-Suchbegriff für die nächste Nachricht</label>
+            <input id="chat-web-query" type="search" maxlength="600" autocomplete="off">
+            <p class="muted small">Ein ausgefüllter Suchbegriff wird beim Senden an Brave Search übermittelt.</p>
+          </div>
           <p class="muted small">Lange Quellen werden an das Kontextfenster angepasst.</p>
         </details>
         <label for="input" class="sr">Nachricht</label>
@@ -194,6 +199,7 @@
         <button class="btn small" data-settings="library">Bibliothek</button>
         <button class="btn small" data-settings="tokens">Token-Kosten</button>
         <button class="btn small" data-settings="performance">Leistung &amp; Updates</button>
+        <button class="btn small" data-settings="web-search">Internet-Recherche</button>
         <button class="btn small" data-settings="connection">Verbindung</button>
         <button class="btn small" data-settings="password">Passwort</button>
       </div>
@@ -270,6 +276,16 @@
         <input id="s-token" type="password" autocomplete="off" placeholder="leer lassen = unverändert">
         <p id="settings-msg" class="muted" role="status"></p>
         <button class="btn primary" type="submit">Speichern</button>
+      </form>
+      <form id="web-search-settings" class="card form" hidden>
+        <h2>Internet-Recherche</h2>
+        <label class="check"><input type="checkbox" id="web-search-enabled"> Websuche im Chat erlauben</label>
+        <label for="web-search-key">Brave-Search-API-Schlüssel</label>
+        <input type="password" id="web-search-key" autocomplete="off">
+        <label class="check"><input type="checkbox" id="web-search-clear"> Gespeicherten Schlüssel löschen</label>
+        <p class="muted">An Brave geht der separat eingegebene Suchbegriff. Die KI verarbeitet Suchtreffer auf deinem Mini-PC.</p>
+        <button type="submit" class="btn primary">Speichern</button>
+        <p id="web-search-msg" role="status"></p>
       </form>
       <section id="connection-panel" class="card form" hidden>
         <h2>Verbindung</h2>

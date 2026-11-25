@@ -221,3 +221,8 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .answer-table th, .answer-table td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .answer-table th { background: var(--accent-dark); font-weight: 650; }
 .answer-table tbody tr:last-child td { border-bottom: 0; }
+
+#chat-web-panel { display: grid; gap: 5px; margin-top: 8px; }
+#chat-web-panel p { margin: 0; }
+.web-sources summary { cursor: pointer; color: var(--accent); }
+.web-sources a { overflow-wrap: anywhere; }
