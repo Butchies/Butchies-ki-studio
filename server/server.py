@@ -847,6 +847,42 @@ def team_plan(messages):
         conn.close()
 
 
+def knowledge_backup():
+    import sqlite3
+    from contextlib import closing
+    folder = os.path.join(DATA_DIR, "knowledge", "backups")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    stamp = time.strftime("%Y%m%d", time.gmtime())
+    target = os.path.join(folder, "knowledge-" + stamp + ".sqlite3")
+    if os.path.exists(target):
+        return target
+    with closing(knowledge_db()) as source:
+        size = source.execute("PRAGMA page_count").fetchone()[0] * source.execute("PRAGMA page_size").fetchone()[0]
+        require_storage(DATA_DIR, size * 2 + 262144)
+        tmp = target + ".tmp"
+        try:
+            with closing(sqlite3.connect(tmp)) as dest:
+                source.backup(dest)
+                if dest.execute("PRAGMA quick_check").fetchone()[0] != "ok":
+                    raise RuntimeError("Wissenssicherung beschädigt")
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, target)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+    return target
+
+
+def knowledge_backup_thread():
+    while True:
+        try:
+            if os.path.isfile(os.path.join(DATA_DIR, "knowledge", "memory.sqlite3")):
+                knowledge_backup()
+        except Exception as exc:
+            log("Wissenssicherung fehlgeschlagen: " + str(exc))
+        time.sleep(3600)
+
+
 def knowledge_db():
     import sqlite3
     folder = os.path.join(DATA_DIR, "knowledge")
@@ -2372,6 +2408,7 @@ def main():
     threading.Thread(target=VISION.watch, daemon=True).start()
     load_catalog_cache()
     threading.Thread(target=update_check_thread, daemon=True).start()
+    threading.Thread(target=knowledge_backup_thread, daemon=True).start()
     if ext_installed("vision"):
         VISION.start()
     threading.Thread(target=sleep_thread, daemon=True).start()
