@@ -32,7 +32,8 @@ function activity() {
 
 // ---------------------------------------------------------------- Speicher
 function loadChats() {
-  try { state.chats = JSON.parse(localStorage.getItem("bki-chats") || "[]"); } catch (e) { state.chats = []; }
+  try { state.chats = JSON.parse(localStorage.getItem("bki-chats") || "[]");
+    state.chats.forEach((c) => (c.messages || []).forEach((m) => { delete m.think; delete m.pending; })); } catch (e) { state.chats = []; }
 }
 function saveChats() {
   try { localStorage.setItem("bki-chats", JSON.stringify(state.chats.slice(0, 50))); } catch (e) { /* voll */ }
@@ -163,7 +164,18 @@ function renderStatus(s) {
   }
   const ext = s.ext || {};
   state.ext = ext;
-  $("nav-images").hidden = !ext.images;
+  const engines = s.image_engines || [];
+  if (engines.join(",") !== (state.imageEngines || []).join(",")) {
+    state.imageEngines = engines;
+    const select = $("img-engine");
+    const previous = select.value;
+    select.replaceChildren(...engines.map((engine) => new Option(imageLabels[engine], engine)));
+    if (engines.includes(previous)) select.value = previous;
+    updateImageForm();
+  }
+  $("nav-images").hidden = !engines.length;
+  $("chat-image-create").hidden = !engines.length;
+  if (state.pendingImage && !s.job?.running) finishChatImage();
   $("img-btn").hidden = !ext.vision;
   $("mic-btn").hidden = !ext.stt;
   let up = $("update-pill");
@@ -339,7 +351,16 @@ function messageEl(m) {
     }
     d.appendChild(document.createTextNode(m.content));
   } else {
-    if (m.think) { const t = document.createElement("details"); const s = document.createElement("summary"); s.textContent = "Gedanken der KI"; const p = document.createElement("div"); p.className = "think"; p.textContent = m.think; t.append(s, p); d.appendChild(t); }
+    if (m.pending && !m.content) {
+      const status = document.createElement("p"); status.className = "thinking-status"; status.textContent = "Denke nach …";
+      d.appendChild(status);
+    }
+    if (m.generatedImage && /^bild-[0-9a-f-]+\.png$/.test(m.generatedImage)) {
+      const url = "/api/images/file/" + encodeURIComponent(m.generatedImage);
+      const link = document.createElement("a"); link.href = url; link.target = "_blank"; link.rel = "noopener";
+      const img = document.createElement("img"); img.src = url; img.alt = "Erzeugtes Bild"; img.className = "chat-generated-image";
+      link.appendChild(img); d.appendChild(link);
+    }
     const body = document.createElement("div"); body.className = "answer-content"; renderMarkdown(m.content || "", body); d.appendChild(body);
     if (Array.isArray(m.sources)) {
       const sources = document.createElement("details"); sources.className = "web-sources";
@@ -364,6 +385,9 @@ function messageEl(m) {
       const tools = document.createElement("div"); tools.className = "bot-tools";
       const copy = button("Antwort kopieren", "small", () => copyText(m.content, copy, "Antwort kopieren"));
       tools.appendChild(copy);
+      if (state.imageEngines?.length) {
+        tools.appendChild(button("Als Bildprompt verwenden", "small", () => openImagesForChat(m.content)));
+      }
       if (state.ext?.tts) {
         const read = button("Vorlesen", "small", () => speak(m.content, read));
         tools.appendChild(read);
@@ -420,7 +444,7 @@ $("composer").addEventListener("submit", async (e) => {
   };
   c.messages.push(imgs.length ? { role: "user", content: text, images: imgs } : { role: "user", content: text });
   state.pendingImages = []; renderAttach();
-  const bot = { role: "assistant", content: "", think: "" };
+  const bot = { role: "assistant", content: "", pending: true };
   c.messages.push(bot);
   $("input").value = "";
   saveChats(); renderHistory(); renderMessages();
@@ -461,20 +485,19 @@ $("composer").addEventListener("submit", async (e) => {
             $("token-last").disabled = false;
           }
           const d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
-          if (d.reasoning_content) bot.think += d.reasoning_content;
           if (d.content) bot.content += d.content;
         } catch (x) { /* unvollständig */ }
       }
       if (Date.now() - last > 80) {
         last = Date.now();
         const fresh = messageEl(bot); fresh.classList.add("cursor");
-        if (!bot.content && bot.think) fresh.querySelector("details") && (fresh.querySelector("details").open = true);
         box.replaceChild(fresh, box.lastChild); box.scrollTop = box.scrollHeight;
       }
     }
   } catch (err) {
     if (err.name !== "AbortError") bot.content += (bot.content ? "\n\n" : "") + "⚠ " + err.message;
   } finally {
+    delete bot.pending;
     state.streaming = null; $("stop-btn").hidden = true;
     saveChats(); renderMessages(); pollStatus();
   }
@@ -655,6 +678,7 @@ function openSettingsSection(section) {
   $("pw-form").hidden = section !== "password";
   $("connection-panel").hidden = section !== "connection";
   $("web-search-settings").hidden = section !== "web-search";
+  $("image-tools-settings").hidden = section !== "image-tools";
   $("ki-setup-panel").hidden = section !== "setup";
   if (section === "setup") loadSetupModels();
   if (!editor) return;
@@ -749,6 +773,8 @@ async function loadSettings() {
     $("s-repo").value = s.update_repo || ""; $("s-token").value = "";
     $("s-token").placeholder = s.github_token_set ? "gesetzt – leer lassen = unverändert" : "nicht gesetzt";
     $("connection-host").textContent = location.host;
+    $("comfy-address").value = s.comfy_address || "";
+    for (const profile of comfyProfiles) $("comfy-" + profile).value = s.comfy_profiles?.[profile] || "";
     $("web-search-enabled").checked = !!s.web_search_enabled;
     $("web-search-key").placeholder = s.brave_search_key_set ? "Gespeichert" : "Nicht gesetzt";
   } catch (e) { showErr(e); }
@@ -927,9 +953,88 @@ async function loadImages() {
     });
   } catch (e) { showErr(e); }
 }
+const comfyProfiles = ["sdxl", "flux", "edit", "upscale"];
+const imageLabels = { local: "SD Turbo · lokal", sdxl: "ComfyUI · SDXL", flux: "ComfyUI · FLUX",
+  edit: "ComfyUI · Bearbeiten", upscale: "ComfyUI · Hochskalieren" };
+function updateImageForm() {
+  const engine = $("img-engine").value;
+  $("img-local-options").hidden = engine !== "local";
+  $("img-original-wrap").hidden = !["edit", "upscale"].includes(engine);
+}
+function openImagesForChat(prompt) {
+  state.imageChat = state.current || "new";
+  $("img-prompt").value = prompt.slice(0, 4000);
+  $("image-target").textContent = "Das Ergebnis erscheint in deinem Chat und in der Galerie.";
+  setView("images");
+  $("img-prompt").focus();
+}
+$("chat-image-create").addEventListener("click", () => openImagesForChat($("input").value));
+$("img-engine").addEventListener("change", updateImageForm);
+$("comfy-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await api("/api/settings/images", {
+      address: $("comfy-address").value.trim(),
+      profiles: Object.fromEntries(comfyProfiles.map((p) => [p, $("comfy-" + p).value.trim()])),
+    });
+    $("image-settings-msg").textContent = "Gespeichert.";
+    await pollStatus();
+  } catch (error) { $("image-settings-msg").textContent = error.message; }
+});
+document.querySelectorAll("[data-image-backend]").forEach((b) => b.addEventListener("click", async () => {
+  try {
+    await api("/api/images/install", { backend: b.dataset.imageBackend });
+    $("image-settings-msg").textContent = "Installation gestartet.";
+    await pollStatus();
+  } catch (error) { $("image-settings-msg").textContent = error.message; }
+}));
+async function finishChatImage() {
+  const request = state.pendingImage;
+  state.pendingImage = null;
+  try {
+    const { images } = await api("/api/images");
+    if (images.some((image) => image.file === request.file)) {
+      const chat = state.chats.find((c) => c.id === request.chat);
+      if (!chat) return;
+      chat.messages.push({ role: "assistant", content: "", generatedImage: request.file });
+      saveChats();
+      if (state.view === "chat" && state.current === chat.id) renderMessages();
+    }
+  } catch (error) { showErr(error); }
+}
 $("img-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  try { await api("/api/images/generate", { prompt: $("img-prompt").value, steps: +$("img-steps").value }); pollStatus(); } catch (err) { showErr(err); }
+  const target = state.imageChat;
+  const engine = $("img-engine").value;
+  const prompt = $("img-prompt").value;
+  try {
+    let image;
+    if (["edit", "upscale"].includes(engine)) {
+      const file = $("img-original").files[0];
+      if (!file || file.size > 8 * 1024 * 1024 || !["image/png", "image/jpeg"].includes(file.type)) {
+        throw new Error("Bitte ein PNG oder JPEG bis 8 MB auswählen.");
+      }
+      image = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file);
+      });
+    }
+    const result = await api("/api/images/generate", { prompt, engine, image, steps: +$("img-steps").value, format: $("img-format").value });
+    if (target) {
+      let chat = state.chats.find((c) => c.id === target);
+      if (!chat) {
+        chat = { id: Date.now().toString(36), title: (prompt.trim() || "Bild").slice(0, 40), messages: [] };
+        state.chats.unshift(chat);
+      }
+      chat.messages.push({ role: "user", content: prompt.trim() || "Bild hochskalieren" });
+      state.current = chat.id;
+      state.pendingImage = { file: result.file, chat: chat.id };
+      state.imageChat = null;
+      $("image-target").textContent = "";
+      saveChats(); renderHistory(); setView("chat"); renderMessages();
+    }
+    await pollStatus();
+  } catch (err) { showErr(err); }
 });
 
 // ---------------------------------------------------------------- Akzentfarbe aus Windows (vom Taskleisten-Programm übergeben)

@@ -19,7 +19,9 @@ Umgebungsvariablen (vor allem zum Testen):
   BKI_NOSETUP=1 keine automatische Ersteinrichtung beim Start
 """
 
+import base64
 import hashlib
+import ipaddress
 import hmac
 import html
 import http.client
@@ -41,7 +43,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.18"
+VERSION = "0.4.19"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -1230,19 +1232,28 @@ def install_tts():
     ext_mark("tts", {"voice": "de_DE-thorsten-medium.onnx"})
 
 
-def install_images():
+def install_images(backend="cpu"):
     d = ext_path("images")
     os.makedirs(d, exist_ok=True)
     JOB.progress(1, "Suche stable-diffusion.cpp …")
-    notv = lambda n: "vulkan" not in n and "rocm" not in n and "cuda" not in n  # noqa: E731
-    tag, name, url = github_asset("leejet/stable-diffusion.cpp", [
-        ["Linux", "x86_64", ".zip", notv], ["Linux", "x86_64", notv], ["Linux", "x86_64"]])
+    def platform(name):
+        low = name.lower()
+        return ("linux" in low or "ubuntu" in low) and any(x in low for x in ("x86_64", "amd64", "x64"))
+
+    def variant(name):
+        low = name.lower()
+        if backend == "vulkan":
+            return "vulkan" in low
+        return not any(x in low for x in ("vulkan", "rocm", "cuda", "hip", "metal", "sycl", "musa", "opencl", "cudart"))
+
+    tag, name, url = github_asset("leejet/stable-diffusion.cpp", [[platform, variant]])
     if not url:
         raise RuntimeError("Kein Linux-Programm im neuesten stable-diffusion.cpp-Release (%s)" % tag)
     arch = os.path.join(d, name)
     download(url, arch, lambda f, a, b: JOB.progress(1 + 9 * f, "stable-diffusion.cpp: %s / %s" % (gb(a), gb(b))))
-    extract(arch, os.path.join(d, "bin"))
-    if not find_file(os.path.join(d, "bin"), ["sd-cli", "sd"]):
+    binary_dir = os.path.join(d, "bin-" + backend + "-" + secrets.token_hex(4))
+    extract(arch, binary_dir)
+    if not find_file(binary_dir, ["sd-cli", "sd"]):
         raise RuntimeError("sd-Programm im Paket nicht gefunden")
     JOB.progress(11, "Suche Bildmodell (SD Turbo) …")
     files = [f for f in hf_files("stabilityai/sd-turbo") if f.endswith(".safetensors") and "/" not in f]
@@ -1250,7 +1261,7 @@ def install_images():
     if not pick:
         raise RuntimeError("SD-Turbo-Modell nicht gefunden")
     hf_download("stabilityai/sd-turbo", pick, d, 12, 99, "Bildmodell")
-    ext_mark("images", {"model": pick, "sd": tag})
+    ext_mark("images", {"model": pick, "sd": tag, "backend": backend, "bin": os.path.basename(binary_dir)})
 
 
 INSTALLERS = {"vision": install_vision, "stt": install_stt, "tts": install_tts, "images": install_images}
@@ -1319,18 +1330,123 @@ def text_to_speech(text):
     return data
 
 
-def generate_image(prompt, steps):
+COMFY_PROFILES = ("sdxl", "flux", "edit", "upscale")
+
+
+def comfy_endpoint(value):
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        address = ipaddress.ip_address(parsed.hostname)
+        if (parsed.scheme not in ("http", "https") or parsed.username or parsed.password or
+                parsed.path not in ("", "/") or parsed.query or parsed.fragment or
+                not (address.is_loopback or address.version == 4 and any(
+                    address in ipaddress.ip_network(net) for net in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")))):
+            raise ValueError
+        return parsed.scheme, str(address), parsed.port or (443 if parsed.scheme == "https" else 8188)
+    except (TypeError, ValueError) as error:
+        raise ValueError("ComfyUI-Adresse als Loopback- oder private IPv4-Adresse angeben, z. B. http://127.0.0.1:8188.") from error
+
+
+def comfy_workflow(raw, profile):
+    if not isinstance(raw, str) or len(raw) > 150000:
+        raise ValueError("Workflow als ComfyUI-API-JSON mit maximal 150.000 Zeichen eingeben.")
+    try:
+        graph = json.loads(raw)
+    except ValueError as error:
+        raise ValueError("Workflow-JSON ungültig.") from error
+    if not isinstance(graph, dict) or not graph or not all(
+            isinstance(node, dict) and isinstance(node.get("class_type"), str) and
+            isinstance(node.get("inputs"), dict) for node in graph.values()):
+        raise ValueError("Bitte einen Workflow im API-Format exportieren.")
+    values = [value for node in graph.values() for value in node["inputs"].values() if isinstance(value, str)]
+    if profile in ("edit", "upscale") and "{{image}}" not in values:
+        raise ValueError("Bei Bearbeitung und Upscaling muss ein Eingabefeld exakt {{image}} enthalten.")
+    if profile != "upscale" and not any("{{prompt}}" in value for value in values):
+        raise ValueError("Ein Text-Eingabefeld muss {{prompt}} enthalten.")
+    if not any(node["class_type"] == "SaveImage" for node in graph.values()):
+        raise ValueError("Der Workflow braucht einen SaveImage-Knoten.")
+    return graph
+
+
+def comfy_request(endpoint, method, path, body=None, content_type="application/json", limit=4 * 1024 * 1024):
+    scheme, host, port = endpoint
+    cls = http.client.HTTPSConnection if scheme == "https" else http.client.HTTPConnection
+    conn = cls(host, port, timeout=30)
+    try:
+        conn.request(method, path, body=body, headers={"Content-Type": content_type})
+        response = conn.getresponse()
+        if response.status != 200:
+            raise RuntimeError("ComfyUI meldet HTTP %d. Workflow und installierte Modelle prüfen." % response.status)
+        result = response.read(limit + 1)
+        if len(result) > limit:
+            raise RuntimeError("ComfyUI-Antwort ist zu groß.")
+        return result
+    finally:
+        conn.close()
+
+
+def generate_comfy_image(endpoint, raw, profile, prompt, original, name):
+    graph = comfy_workflow(raw, profile)
+    filename = ""
+    if original:
+        boundary = secrets.token_hex(20)
+        kind, pixels = original
+        upload = ("--%s\r\nContent-Disposition: form-data; name=\"image\"; filename=\"studio-%s.%s\"\r\n"
+                  "Content-Type: image/%s\r\n\r\n" % (boundary, secrets.token_hex(10), kind, kind)).encode()
+        reply = json.loads(comfy_request(endpoint, "POST", "/upload/image",
+            upload + pixels + ("\r\n--%s--\r\n" % boundary).encode(), "multipart/form-data; boundary=" + boundary))
+        filename = reply.get("name", "")
+        if not filename or filename != os.path.basename(filename) or reply.get("subfolder"):
+            raise RuntimeError("ComfyUI meldet einen unbekannten Eingabedateinamen.")
+    for node in graph.values():
+        for key, value in node["inputs"].items():
+            if isinstance(value, str):
+                node["inputs"][key] = filename if value == "{{image}}" else value.replace("{{prompt}}", prompt)
+    job = json.loads(comfy_request(endpoint, "POST", "/prompt", json.dumps({"prompt": graph})))
+    prompt_id = job.get("prompt_id", "")
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,80}", prompt_id):
+        raise RuntimeError("ComfyUI hat den Workflow nicht angenommen.")
+    JOB.progress(10, "ComfyUI verarbeitet den Workflow …")
+    deadline = time.monotonic() + 900
+    while time.monotonic() < deadline:
+        record = json.loads(comfy_request(endpoint, "GET", "/history/" + prompt_id)).get(prompt_id)
+        if record:
+            if record.get("status", {}).get("status_str") == "error":
+                raise RuntimeError("ComfyUI-Workflow fehlgeschlagen. Details stehen in ComfyUI.")
+            for result in record.get("outputs", {}).values():
+                for image in result.get("images", []):
+                    if image.get("type") != "output" or not str(image.get("filename", "")).lower().endswith(".png"):
+                        continue
+                    query = urllib.parse.urlencode({key: image.get(key, "") for key in ("filename", "subfolder", "type")})
+                    pixels = comfy_request(endpoint, "GET", "/view?" + query, limit=32 * 1024 * 1024)
+                    if not pixels.startswith(b"\x89PNG\r\n\x1a\n"):
+                        raise RuntimeError("ComfyUI lieferte kein PNG.")
+                    os.makedirs(IMAGE_DIR, exist_ok=True)
+                    path = os.path.join(IMAGE_DIR, name)
+                    with open(path + ".part", "wb") as f:
+                        f.write(pixels)
+                    os.replace(path + ".part", path)
+                    with open(path + ".json", "w", encoding="utf-8") as f:
+                        json.dump({"prompt": prompt}, f, ensure_ascii=False)
+                    return
+            raise RuntimeError("Der ComfyUI-Workflow hat kein PNG ausgegeben.")
+        time.sleep(2)
+    raise RuntimeError("ComfyUI hat innerhalb von 15 Minuten kein Bild geliefert.")
+
+
+def generate_image(prompt, steps, name, width, height):
     d = ext_path("images")
-    sd = find_file(os.path.join(d, "bin"), ["sd-cli", "sd"])
+    sd = None
     try:
         with open(ext_path("images", "installed.json"), encoding="utf-8") as f:
-            model = os.path.join(d, json.load(f)["model"])
+            metadata = json.load(f)
+            model = os.path.join(d, metadata["model"])
+            sd = find_file(os.path.join(d, metadata.get("bin", "bin")), ["sd-cli", "sd"])
     except (OSError, ValueError, KeyError):
         model = ""
     if not sd or not os.path.exists(model):
         raise RuntimeError("Bilder erzeugen ist nicht installiert")
     os.makedirs(IMAGE_DIR, exist_ok=True)
-    name = time.strftime("bild-%Y%m%d-%H%M%S.png")
     out = os.path.join(IMAGE_DIR, name)
     threads = str(max(1, (os.cpu_count() or 2) // 2))
     JOB.progress(3, "Lade Bildmodell …")
@@ -1351,7 +1467,7 @@ def generate_image(prompt, steps):
             JOB.progress(max(stage["p"], 10), "Lade Bildmodell …")
 
     env = dict(os.environ, LD_LIBRARY_PATH=os.path.dirname(sd))
-    p = subprocess.Popen([sd, "-m", model, "-p", prompt, "-W", "512", "-H", "512", "--steps", str(steps),
+    p = subprocess.Popen([sd, "-m", model, "-p", prompt, "-W", str(width), "-H", str(height), "--steps", str(steps),
                           "--cfg-scale", "1.0", "-t", threads, "-o", out],
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
     buf = ""
@@ -1761,6 +1877,7 @@ class Handler(BaseHTTPRequestHandler):
                 "updates_available": updates_available(),
                 "ext": {e["id"]: ext_installed(e["id"]) for e in EXTENSIONS},
                 "web_search_available": bool(CONFIG.get("web_search_enabled") and CONFIG.get("brave_search_key")),
+                "image_engines": (["local"] if ext_installed("images") else []) + list(CONFIG.get("comfy_profiles", {})),
                 "vision": VISION.state,
             })
         if path == "/api/models":
@@ -1909,6 +2026,29 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as e:
                 return self.error(str(e))
             return self.send_json({"ok": True, "workspace": db, "presets": STUDIO_BOTS})
+        if path == "/api/settings/images":
+            address = data.get("address", "")
+            profiles = data.get("profiles")
+            try:
+                if not isinstance(profiles, dict) or any(p not in COMFY_PROFILES for p in profiles):
+                    raise ValueError("Unbekanntes ComfyUI-Profil.")
+                if any(profiles.values()):
+                    comfy_endpoint(address)
+                for profile, raw in profiles.items():
+                    if raw:
+                        comfy_workflow(raw, profile)
+            except ValueError as error:
+                return self.error(str(error))
+            CONFIG["comfy_address"] = address
+            CONFIG["comfy_profiles"] = {p: raw for p, raw in profiles.items() if raw}
+            save_config(CONFIG)
+            return self.send_json({"ok": True})
+        if path == "/api/images/install":
+            backend = data.get("backend")
+            if backend not in ("cpu", "vulkan"):
+                return self.error("CPU oder Vulkan auswählen.")
+            ok = JOB.start("Bildlaufzeit installieren", install_images, backend)
+            return self.send_json({"ok": ok, "error": "" if ok else "Es läuft schon eine Aufgabe"})
         if path == "/api/settings/web-search":
             key = data.get("key", "")
             if not isinstance(key, str) or len(key) > 255 or any(ord(c) < 33 or ord(c) > 126 for c in key.strip()):
@@ -2018,11 +2158,39 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "/api/images/generate":
             prompt = str(data.get("prompt", "")).strip()
-            if not prompt:
+            engine = data.get("engine", "local")
+            if not prompt and engine != "upscale":
                 return self.error("Bitte beschreiben, was auf dem Bild sein soll")
-            steps = max(1, min(8, int(data.get("steps") or 1)))
-            ok = JOB.start("Bild erzeugen", generate_image, prompt[:1000], steps)
-            return self.send_json({"ok": ok, "error": "" if ok else "Es läuft schon eine Aufgabe"})
+            name = time.strftime("bild-%Y%m%d-%H%M%S-") + secrets.token_hex(5) + ".png"
+            if engine == "local":
+                if not ext_installed("images"):
+                    return self.error("Zuerst die lokale Bildlaufzeit installieren.")
+                try:
+                    steps = max(1, min(8, int(data.get("steps") or 1)))
+                except (TypeError, ValueError):
+                    return self.error("Ungültige Schrittzahl.")
+                width, height = {"square": (512, 512), "wide": (768, 448), "portrait": (448, 768)}.get(
+                    str(data.get("format", "")), (512, 512))
+                job_args = (generate_image, prompt[:4000], steps, name, width, height)
+            elif isinstance(engine, str) and engine in CONFIG.get("comfy_profiles", {}):
+                original = None
+                if engine in ("edit", "upscale"):
+                    match = re.fullmatch(r"data:image/(png|jpeg);base64,([A-Za-z0-9+/=]+)", str(data.get("image", "")))
+                    try:
+                        if not match or len(match[2]) > 12 * 1024 * 1024:
+                            raise ValueError
+                        original = (match[1], base64.b64decode(match[2], validate=True))
+                        signature = b"\x89PNG\r\n\x1a\n" if match[1] == "png" else b"\xff\xd8\xff"
+                        if not original[1].startswith(signature):
+                            raise ValueError
+                    except ValueError:
+                        return self.error("Bitte ein PNG oder JPEG bis 8 MB auswählen.")
+                job_args = (generate_comfy_image, comfy_endpoint(CONFIG["comfy_address"]),
+                            CONFIG["comfy_profiles"][engine], engine, prompt[:4000], original, name)
+            else:
+                return self.error("Bild-Engine in den Einstellungen einrichten.")
+            ok = JOB.start("Bild erzeugen", *job_args)
+            return self.send_json({"ok": ok, "file": name if ok else "", "error": "" if ok else "Es läuft schon eine Aufgabe"})
         if path == "/api/images/delete":
             fn = os.path.basename(str(data.get("file", "")))
             fp = os.path.join(IMAGE_DIR, fn)

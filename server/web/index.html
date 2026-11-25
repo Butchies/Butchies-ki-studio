@@ -89,6 +89,7 @@
         <div id="attach-preview" class="attach-preview"></div>
         <textarea id="input" rows="3" placeholder="Frag etwas … (Enter = senden, Umschalt+Enter = neue Zeile)"></textarea>
         <div class="composer-row">
+          <button class="btn ghost small" type="button" id="chat-image-create" hidden>Bild erzeugen</button>
           <button class="btn ghost small" type="button" id="attach-btn">Textdatei einfügen</button>
           <input type="file" id="attach" hidden accept=".txt,.py,.js,.ts,.json,.md,.html,.css,.ps1,.bat,.sh,.cs,.cpp,.c,.h,.java,.xml,.yaml,.yml,.ini,.cfg,.log,.csv">
           <button class="btn ghost small" type="button" id="img-btn" hidden>Bild anhängen</button>
@@ -129,12 +130,22 @@
     <!-- Bilder -->
     <main class="view" id="view-images" hidden>
       <h1>Bilder erzeugen</h1>
-      <p class="muted">Läuft auf dem Prozessor des Mini-PCs – ein Bild braucht grob eine halbe bis mehrere Minuten.</p>
+      <p class="muted" id="image-target"></p>
       <form id="img-form" class="card form">
+        <label for="img-engine">Bild-Engine</label>
+        <select id="img-engine"></select>
+        <div id="img-original-wrap" hidden>
+          <label for="img-original">Ausgangsbild (PNG oder JPEG bis 8 MB)</label>
+          <input type="file" id="img-original" accept="image/png,image/jpeg">
+        </div>
         <label for="img-prompt">Was soll auf dem Bild sein? (Englisch klappt am besten)</label>
         <textarea id="img-prompt" rows="3" placeholder="a cozy smoking lounge with leather armchairs, warm light, photo"></textarea>
-        <label for="img-steps">Schritte (1 = schnell, mehr = genauer)</label>
-        <input id="img-steps" type="number" min="1" max="8" value="1">
+        <div id="img-local-options" class="form">
+          <label for="img-format">Seitenverhältnis</label>
+          <select id="img-format"><option value="square">Quadratisch</option><option value="wide">Querformat</option><option value="portrait">Hochformat</option></select>
+          <label for="img-steps">Schritte (1–8)</label>
+          <input id="img-steps" type="number" min="1" max="8" value="1">
+        </div>
         <button class="btn primary" type="submit">Bild erzeugen</button>
       </form>
       <div id="gallery" class="gallery"></div>
@@ -199,6 +210,7 @@
         <button class="btn small" data-settings="library">Bibliothek</button>
         <button class="btn small" data-settings="tokens">Token-Kosten</button>
         <button class="btn small" data-settings="performance">Leistung &amp; Updates</button>
+        <button class="btn small" data-settings="image-tools">Bildwerkzeuge</button>
         <button class="btn small" data-settings="web-search">Internet-Recherche</button>
         <button class="btn small" data-settings="connection">Verbindung</button>
         <button class="btn small" data-settings="password">Passwort</button>
@@ -277,6 +289,25 @@
         <p id="settings-msg" class="muted" role="status"></p>
         <button class="btn primary" type="submit">Speichern</button>
       </form>
+      <section id="image-tools-settings" class="card form" hidden>
+        <h2>Bildwerkzeuge</h2>
+        <div class="btn-row">
+          <button class="btn" type="button" data-image-backend="cpu">SD Turbo (CPU) installieren</button>
+          <button class="btn" type="button" data-image-backend="vulkan">SD Turbo (Vulkan) installieren</button>
+        </div>
+        <form id="comfy-form" class="form">
+          <h3>ComfyUI</h3>
+          <label for="comfy-address">Adresse im Heimnetz</label>
+          <input id="comfy-address" placeholder="http://127.0.0.1:8188">
+          <p class="muted">In ComfyUI als API-JSON exportieren. Setze im Promptfeld {{prompt}} ein, beim LoadImage-Knoten für Bearbeitung und Upscaling {{image}}. Der Workflow braucht SaveImage als PNG-Ausgabe.</p>
+          <label for="comfy-sdxl">SDXL · API-Workflow</label><textarea id="comfy-sdxl" rows="3"></textarea>
+          <label for="comfy-flux">FLUX · API-Workflow</label><textarea id="comfy-flux" rows="3"></textarea>
+          <label for="comfy-edit">Bildbearbeitung · API-Workflow</label><textarea id="comfy-edit" rows="3"></textarea>
+          <label for="comfy-upscale">Hochskalierung · API-Workflow</label><textarea id="comfy-upscale" rows="3"></textarea>
+          <button class="btn primary" type="submit">Workflows speichern</button>
+        </form>
+        <p id="image-settings-msg" role="status"></p>
+      </section>
       <form id="web-search-settings" class="card form" hidden>
         <h2>Internet-Recherche</h2>
         <label class="check"><input type="checkbox" id="web-search-enabled"> Websuche im Chat erlauben</label>

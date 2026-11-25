@@ -226,3 +226,6 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 #chat-web-panel p { margin: 0; }
 .web-sources summary { cursor: pointer; color: var(--accent); }
 .web-sources a { overflow-wrap: anywhere; }
+
+.thinking-status { color: var(--muted); font-size: 14px; }
+.chat-generated-image { display: block; max-width: min(100%, 650px); max-height: 65vh; object-fit: contain; border-radius: 8px; }
