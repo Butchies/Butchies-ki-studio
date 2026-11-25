@@ -1020,7 +1020,12 @@ def team_specialist_response(model, role, messages):
     """Run a temporary text specialist without changing the saved main model."""
     with TEAM_LOCK:
         TEAM_ENGINE.stop()
+        main_was_running = LLAMA.running()
+        vision_was_running = VISION.running()
         try:
+            # Sequential loading avoids keeping multiple large models in RAM.
+            LLAMA.stop()
+            VISION.stop()
             TEAM_ENGINE.start(model_override=model)
             deadline = time.monotonic() + 300
             while time.monotonic() < deadline:
@@ -1049,6 +1054,10 @@ def team_specialist_response(model, role, messages):
                 conn.close()
         finally:
             TEAM_ENGINE.stop()
+            if main_was_running:
+                LLAMA.start()
+            if vision_was_running:
+                VISION.start()
 
 
 
