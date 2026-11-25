@@ -17,10 +17,10 @@
     <label for="gate-user">Benutzername</label>
     <input id="gate-user" type="text" autocomplete="username" required maxlength="64">
     <label for="gate-pw">Passwort</label>
-    <input id="gate-pw" type="password" autocomplete="current-password" required minlength="8">
+    <input id="gate-pw" type="password" autocomplete="current-password" required minlength="4">
     <div id="gate-pw2-wrap" hidden>
       <label for="gate-pw2">Passwort wiederholen</label>
-      <input id="gate-pw2" type="password" autocomplete="new-password" minlength="8">
+      <input id="gate-pw2" type="password" autocomplete="new-password" minlength="4">
     </div>
     <p id="gate-error" class="error" role="alert"></p>
     <button class="btn primary" type="submit" id="gate-btn">Anmelden</button>
@@ -192,7 +192,7 @@
       <form id="pw-form" class="card form">
         <h2>Passwort ändern</h2>
         <label for="pw-old">Altes Passwort</label><input id="pw-old" type="password" autocomplete="current-password">
-        <label for="pw-new">Neues Passwort (mind. 8 Zeichen)</label><input id="pw-new" type="password" autocomplete="new-password">
+        <label for="pw-new">Neues Passwort (mind. 4 Zeichen)</label><input id="pw-new" type="password" autocomplete="new-password">
         <label class="check"><input type="checkbox" id="pw-linux" disabled> Linux-Systemkonto bleibt gesperrt</label>
         <p id="pw-msg" class="muted" role="status"></p>
         <button class="btn primary" type="submit">Ändern</button>
