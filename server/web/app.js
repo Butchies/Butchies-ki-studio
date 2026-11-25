@@ -709,7 +709,19 @@ async function loadStorage() {
         if(percent>=85) usage.style.color="#A65B00";
         info.append(bar,usage);
       }
-      row.append(info); list.append(row);
+      row.append(info);
+      if (disk.uuid && disk.mountpoint && disk.mountpoint !== "/" && !disk.ro && disk.available > 0) {
+        const action = button("Speichererweiterung prüfen", "", () => {
+          const accepted = confirm("Datenträger " + disk.path + " (" + disk.mountpoint + ") als Speichererweiterung vormerken? Verfügbar: " + fmtGB(disk.available) + ". Es werden noch keine Daten verschoben oder Datenträger verändert.");
+          if (accepted) {
+            const note = document.createElement("p");
+            note.textContent = "Auswahl bestätigt. Automatische Einbindung und Verlagerung sind noch nicht verfügbar.";
+            info.append(note);
+          }
+        });
+        row.append(action);
+      }
+      list.append(row);
     }
     if (!d.devices.length) list.textContent="Keine Datenträger gefunden.";
   } catch(e) { list.textContent=e.message || String(e); }
