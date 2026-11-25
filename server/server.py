@@ -1648,6 +1648,9 @@ class Handler(BaseHTTPRequestHandler):
         if not self.session():
             return self.error("Bitte anmelden", 401)
 
+        if path == "/api/team":
+            return self.send_json({"ok": True, "team": CONFIG.get("ai_team", {"enabled": False, "roles": {}}),
+                                   "models": installed_models()})
         if path == "/api/status":
             total, avail = meminfo()
             du = shutil.disk_usage("/")
@@ -1802,6 +1805,19 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "message": "Verlagerung beauftragt; Server wird neu gestartet"})
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 return self.error(str(exc))
+        if path == "/api/team/config":
+            enabled = data.get("enabled")
+            roles = data.get("roles", {})
+            if not isinstance(enabled, bool) or not isinstance(roles, dict):
+                return self.error("Ungültige Teamkonfiguration")
+            allowed = {"programming", "review", "analysis", "vision", "speech", "image"}
+            models = {m["file"] for m in installed_models()}
+            if any(role not in allowed or not isinstance(model, str) or model not in models
+                   for role, model in roles.items()):
+                return self.error("Unbekannte Rolle oder nicht installiertes Modell")
+            CONFIG["ai_team"] = {"enabled": enabled, "roles": roles}
+            save_config(CONFIG)
+            return self.send_json({"ok": True, "team": CONFIG["ai_team"]})
         if path == "/api/storage/plan":
             try:
                 return self.send_json({"ok": True, "plan": storage_expansion_plan(str(data.get("uuid", "")))})
