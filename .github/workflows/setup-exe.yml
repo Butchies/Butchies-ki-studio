@@ -2,7 +2,14 @@ name: Setup.exe bauen
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/5.0]
+    paths:
+      - 'installer/**'
+      - 'server/**'
+      - 'windows/**'
+      - 'VERSION'
+      - 'modelle.json'
+      - '.github/workflows/setup-exe.yml'
   workflow_dispatch:
 
 permissions:
@@ -53,6 +60,20 @@ jobs:
         with:
           name: Butchies-KI-Setup
           path: Butchies-KI-Setup.exe
+      - name: EXE als Vorabversion veröffentlichen
+        if: github.ref == 'refs/heads/release/5.0'
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v5.0.0-preview"
+          gh release view $tag 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --target $env:GITHUB_SHA --prerelease --title "Butchies KI Studio 5.0 Vorschau" --notes "Entwicklungsstand, nicht auf Hardware getestet."
+            if ($LASTEXITCODE -ne 0) { throw "Release konnte nicht erstellt werden" }
+          }
+          gh release upload $tag Butchies-KI-Setup.exe --clobber
+          if ($LASTEXITCODE -ne 0) { throw "EXE-Upload fehlgeschlagen" }
       - name: Setup.exe ins Repo legen (download/)
         if: github.ref == 'refs/heads/main'
         shell: powershell
