@@ -904,11 +904,11 @@ def knowledge_add(category, content):
                           (category, content.strip(), time.time())).lastrowid
 
 
-def knowledge_search(query="", limit=100):
+def knowledge_search(query="", limit=100, category=None):
     from contextlib import closing
     with closing(knowledge_db()) as db:
-        rows = db.execute("SELECT id,category,content,created FROM memories WHERE instr(lower(content),lower(?))>0 OR instr(lower(category),lower(?))>0 ORDER BY id DESC LIMIT ?",
-                          (query, query, min(500,max(1,int(limit))))).fetchall()
+        rows = db.execute("SELECT id,category,content,created FROM memories WHERE (? IS NULL OR category=?) AND (instr(lower(content),lower(?))>0 OR instr(lower(category),lower(?))>0) ORDER BY id DESC LIMIT ?",
+                          (category, category, query, query, min(500,max(1,int(limit))))).fetchall()
     return [dict(zip(("id","category","content","created"), row)) for row in rows]
 
 
@@ -2061,7 +2061,10 @@ class Handler(BaseHTTPRequestHandler):
             query = data.get("query", "")
             if not isinstance(query, str) or len(query)>1000:
                 return self.error("Ungültige Suche")
-            return self.send_json({"ok": True, "entries": knowledge_search(query)})
+            category = data.get("category")
+            if category is not None and (not isinstance(category,str) or len(category)>100):
+                return self.error("Ungültige Kategorie")
+            return self.send_json({"ok": True, "entries": knowledge_search(query, 500, category)})
         if path == "/api/team/config":
             enabled = data.get("enabled")
             roles = data.get("roles", {})
