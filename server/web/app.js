@@ -191,7 +191,11 @@ async function pollStatus() {
     const model = document.createElement("span");
     model.className = "muted small";
     model.textContent = t.phase === "specialist" ? t.model : "";
-    panel.replaceChildren(heading,line,model);
+    const settings = document.createElement("button");
+    settings.type = "button"; settings.className = "btn small";
+    settings.textContent = "KI-Team verwalten";
+    settings.onclick = () => openTeamSettings().catch(showErr);
+    panel.replaceChildren(heading,line,model,settings);
   } catch(e) {
     panel.textContent = "KI-Team: Status nicht verfügbar";
   }
@@ -806,3 +810,43 @@ async function loadStorage() {
   } catch(e) { list.textContent=e.message || String(e); }
 }
 $("storage-refresh").addEventListener("click",loadStorage);
+
+async function openTeamSettings() {
+  if ($("team-settings-dialog")) return;
+  const data = await api("/api/team");
+  if ($("team-settings-dialog")) return;
+  const dialog = document.createElement("dialog");
+  dialog.id = "team-settings-dialog";
+  dialog.style.cssText = "max-width:560px;width:90%;padding:24px;border:1px solid #91b5d8;border-radius:12px;background:#edf5fc;color:#102650";
+  const title = document.createElement("h2"); title.textContent = "KI-Team verwalten";
+  const enabled = document.createElement("input"); enabled.type="checkbox"; enabled.checked=!!data.team.enabled;
+  const toggle = document.createElement("label"); toggle.append(enabled,document.createTextNode(" KI-Team aktivieren"));
+  dialog.append(title,toggle);
+  const fields = {};
+  for (const [role,name] of Object.entries({programming:"Programmier-KI",review:"Prüf-KI",analysis:"Analyse-KI"})) {
+    const label=document.createElement("label"); label.style.display="block"; label.style.marginTop="12px"; label.textContent=name;
+    const select=document.createElement("select"); select.style.width="100%";
+    select.add(new Option("Nicht zugewiesen",""));
+    for (const m of data.models) select.add(new Option(m.name,m.file));
+    select.value=data.team.roles[role] || "";
+    fields[role]=select; label.append(select); dialog.append(label);
+  }
+  const note=document.createElement("p"); note.textContent="Bild- und Sprachspezialisten folgen separat.";
+  const save=document.createElement("button"); save.type="button"; save.className="btn primary"; save.textContent="Speichern";
+  const cancel=document.createElement("button"); cancel.type="button"; cancel.className="btn"; cancel.textContent="Abbrechen";
+  cancel.onclick=()=>dialog.close();
+  save.onclick=async()=>{
+    save.disabled=true;
+    try {
+      const roles={...data.team.roles};
+      for (const [role,field] of Object.entries(fields)) {
+        if(field.value) roles[role]=field.value; else delete roles[role];
+      }
+      await api("/api/team/config",{enabled:enabled.checked,roles});
+      dialog.close();
+    } catch(e) { showErr(e); save.disabled=false; }
+  };
+  dialog.append(note,save,cancel);
+  dialog.addEventListener("close",()=>dialog.remove(),{once:true});
+  document.body.append(dialog); dialog.showModal();
+}
