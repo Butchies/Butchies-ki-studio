@@ -39,7 +39,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.8"
+VERSION = "0.4.9"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -1286,6 +1286,13 @@ def refresh_catalog():
     log("Modell-Katalog aktualisiert (%d Modelle)" % len(CATALOG))
 
 
+def studio_update_source():
+    official = "Butchies/Butchies-ki-studio"
+    repo = CONFIG.get("update_repo") or official
+    ref = "fix/0.4.8-studio-login" if repo.lower() == official.lower() else "main"
+    return repo, ref
+
+
 def check_updates():
     err = []
     try:
@@ -1296,9 +1303,9 @@ def check_updates():
         UPDATE_INFO["llama_latest"], _ = llama_release_asset(CONFIG.get("backend", "vulkan"))
     except Exception as e:  # noqa: BLE001
         err.append("llama.cpp: %s" % e)
-    repo = CONFIG.get("update_repo") or "Butchies/Butchies-ki-studio"
+    repo, ref = studio_update_source()
     try:
-        req = urllib.request.Request("https://api.github.com/repos/%s/contents/VERSION" % repo, headers=github_headers(True))
+        req = urllib.request.Request("https://api.github.com/repos/%s/contents/VERSION?ref=%s" % (repo, ref), headers=github_headers(True))
         with urllib.request.urlopen(req, timeout=20) as r:
             UPDATE_INFO["app_latest"] = r.read().decode().strip()
     except Exception as e:  # noqa: BLE001
@@ -1334,13 +1341,13 @@ def update_check_thread():
 
 
 def update_app():
-    repo = CONFIG.get("update_repo") or "Butchies/Butchies-ki-studio"
+    repo, ref = studio_update_source()
     JOB.progress(2, "Lade Butchies KI Studio von GitHub (%s) …" % repo)
     tmp = os.path.join(DATA_DIR, "app-update")
     shutil.rmtree(tmp, ignore_errors=True)
     os.makedirs(tmp)
     arch = os.path.join(tmp, "app.zip")
-    req = urllib.request.Request("https://api.github.com/repos/%s/zipball/main" % repo, headers=github_headers())
+    req = urllib.request.Request("https://api.github.com/repos/%s/zipball/%s" % (repo, ref), headers=github_headers())
     with urllib.request.urlopen(req, timeout=120) as r, open(arch, "wb") as f:
         shutil.copyfileobj(r, f)
     JOB.progress(40, "Entpacke …")

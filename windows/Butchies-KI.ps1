@@ -389,7 +389,7 @@ function ZeigeFenster {
   })
   $n.BtnSave.Add_Click({
     $h = $script:win.Tag.N.HostBox.Text.Trim().ToLower()
-    if ($h -match '^[a-z0-9-]{1,30}$' -and $h -ne $cfg.host) { SpeicherePasswort ""; $sync.Password = ""; $sync.AcceptedPassword = ""; $sync.Base = ""; $sync.Host = ServerName $h; $sync.Ip = ""; $sync.Mac = ""; $cfg.host = $h; $cfg.ip = ""; $cfg.mac = ""; Speichern }
+    if ($h -match '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$' -and $h -ne $cfg.host) { SpeicherePasswort ""; $sync.Password = ""; $sync.AcceptedPassword = ""; $sync.Base = ""; $sync.Host = ServerName $h; $sync.Ip = ""; $sync.Mac = ""; $cfg.host = $h; $cfg.ip = ""; $cfg.mac = ""; Speichern }
     AutostartSetzen ([bool]$script:win.Tag.N.AutoStart.IsChecked)
     $script:win.Tag.N.SettingsPanel.Visibility = "Collapsed"
   })
@@ -477,6 +477,30 @@ function AutostartSetzen([bool]$an) {
   } elseif (Test-Path $startupLnk) { Remove-Item $startupLnk -Force }
 }
 
+function OeffneLinuxKonsole {
+  $target = $sync.Host
+  if ($target -notmatch '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$') {
+    [Windows.Forms.MessageBox]::Show("Bitte in den Einstellungen einen gültigen Servernamen oder eine IPv4-Adresse hinterlegen.", "Linux-Konsole") | Out-Null
+    return
+  }
+  $ssh = Get-Command ssh.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $ssh) {
+    [Windows.Forms.MessageBox]::Show("Aktiviere unter Windows den OpenSSH-Client in den optionalen Features.", "Linux-Konsole") | Out-Null
+    return
+  }
+  Add-Type -AssemblyName Microsoft.VisualBasic
+  $user = [Microsoft.VisualBasic.Interaction]::InputBox("Linux-Benutzername für $target", "Linux-Konsole (SSH)", "butchies").Trim()
+  if (-not $user) { return }
+  if ($user -cnotmatch '^[a-z_][a-z0-9_-]{0,31}$') {
+    [Windows.Forms.MessageBox]::Show("Ungültiger Linux-Benutzername.", "Linux-Konsole") | Out-Null
+    return
+  }
+  $sshPath = $ssh.Source.Replace("'", "''")
+  $command = "& '$sshPath' -l '$user' -- '$target'"
+  $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+  Start-Process -FilePath (Join-Path $PSHOME "powershell.exe") -ArgumentList "-NoProfile", "-NoExit", "-EncodedCommand", $encoded
+}
+
 function Beenden {
   $sync.Stop = $true
   if ($script:win) { $script:win.Close() }
@@ -535,6 +559,10 @@ function Bearbeite($ctx) {
 $menu = New-Object Windows.Forms.ContextMenuStrip
 [void]$menu.Items.Add("Status anzeigen", $null, { ZeigeFenster })
 [void]$menu.Items.Add("Oberfläche öffnen", $null, { OeffneOberflaeche })
+[void]$menu.Items.Add("Linux-Konsole (SSH)", $null, { OeffneLinuxKonsole })
+[void]$menu.Items.Add("Windows-Update auf GitHub", $null, {
+  Start-Process "https://github.com/Butchies/Butchies-ki-studio/blob/fix/0.4.8-studio-login/download/Butchies-KI-Setup.exe"
+})
 [void]$menu.Items.Add("Mini-PC aufwecken", $null, { $sync.Queue.Enqueue("wake") })
 [void]$menu.Items.Add("-")
 [void]$menu.Items.Add("Beenden", $null, { Beenden })
