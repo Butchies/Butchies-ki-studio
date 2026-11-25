@@ -195,7 +195,10 @@ async function pollStatus() {
     settings.type = "button"; settings.className = "btn small";
     settings.textContent = "KI-Team verwalten";
     settings.onclick = () => openTeamSettings().catch(showErr);
-    panel.replaceChildren(heading,line,model,settings);
+    const knowledge = document.createElement("button");
+    knowledge.type="button"; knowledge.className="btn small"; knowledge.textContent="Wissensbibliothek";
+    knowledge.onclick=()=>openKnowledge().catch(showErr);
+    panel.replaceChildren(heading,line,model,settings,knowledge);
   } catch(e) {
     panel.textContent = "KI-Team: Status nicht verfügbar";
   }
@@ -849,4 +852,38 @@ async function openTeamSettings() {
   dialog.append(note,save,cancel);
   dialog.addEventListener("close",()=>dialog.remove(),{once:true});
   document.body.append(dialog); dialog.showModal();
+}
+
+async function openKnowledge() {
+  if ($("knowledge-dialog")) return;
+  const d=document.createElement("dialog"); d.id="knowledge-dialog";
+  d.style.cssText="width:90%;max-width:850px;max-height:85vh;overflow:auto;background:#edf5fc;color:#102650;border:1px solid #91b5d8;border-radius:12px;padding:24px";
+  const make=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
+  const button=(text,fn)=>{const b=make("button",text);b.type="button";b.className="btn small";b.onclick=()=>Promise.resolve().then(fn).catch(showErr);return b;};
+  const query=make("input");query.placeholder="Wissen durchsuchen";
+  const category=make("input");category.placeholder="Kategorie";category.value="Allgemein";
+  const content=make("textarea");content.placeholder="Wissenseintrag";content.style.width="100%";
+  const list=make("div");let editing=null;const selected=new Set();
+  async function load(){
+    const result=await api("/api/knowledge/search",{query:query.value});
+    selected.clear();list.replaceChildren();
+    for(const entry of result.entries){
+      const row=make("section");row.className="tile";
+      const check=make("input");check.type="checkbox";check.onchange=()=>check.checked?selected.add(entry.id):selected.delete(entry.id);
+      const body=make("p",entry.content);body.style.whiteSpace="pre-wrap";
+      row.append(check,make("strong",entry.category),body,button("Bearbeiten",()=>{editing=entry.id;category.value=entry.category;content.value=entry.content;content.focus();}));
+      list.append(row);
+    }
+  }
+  async function remove(payload){
+    if(!confirm("Ausgewählte Wissenseinträge endgültig löschen?"))return;
+    await api("/api/knowledge/delete",{...payload,confirmed:true});editing=null;await load();
+  }
+  d.append(make("h2","Wissensbibliothek"),query,button("Suchen",load),category,content,
+    button("Speichern",async()=>{await api(editing===null?"/api/knowledge/add":"/api/knowledge/edit",{id:editing,category:category.value,content:content.value});editing=null;content.value="";await load();}),
+    button("Neuer Eintrag",()=>{editing=null;content.value="";}),
+    button("Auswahl löschen",()=>remove({ids:[...selected]})),
+    button("Kategorie löschen",()=>remove({category:category.value})),
+    button("Alles löschen",()=>remove({all:true})),button("Schließen",()=>d.close()),list);
+  d.addEventListener("close",()=>d.remove(),{once:true});document.body.append(d);d.showModal();await load();
 }
