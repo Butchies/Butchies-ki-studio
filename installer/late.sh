@@ -1,7 +1,7 @@
 #!/bin/bash
 # Butchies KI Studio – Einrichtung NACH der Ubuntu-Installation.
 # Läuft im Live-System; das neue System ist unter /target eingehängt.
-set -u
+set -Eeuo pipefail
 B=/cdrom/butchies
 T=/target
 LOG=/tmp/butchies-late.log
@@ -20,6 +20,7 @@ except Exception:
 PY
 }
 in_target() { curtin in-target --target="$T" -- "$@"; }
+trap 'status 0 "Linux-Einrichtung fehlgeschlagen (Zeile $LINENO)" fehler' ERR
 
 echo "=== Butchies late.sh $(date) ==="
 # shellcheck disable=SC1091
@@ -29,6 +30,8 @@ status 86 "Kopiere Butchies KI Studio auf die SSD …"
 install -d -m 755 "$T/opt/butchies-ki" "$T/var/lib/butchies-ki"
 install -d -m 700 "$T/etc/butchies-ki"
 cp -r "$B/server/." "$T/opt/butchies-ki/"
+install -m 644 "$B/VERSION" "$T/opt/butchies-ki/VERSION"
+install -m 644 "$B/modelle.json" "$T/opt/butchies-ki/modelle.json"
 chmod 755 "$T/opt/butchies-ki/server.py" "$T/opt/butchies-ki/wol-enable.sh"
 cp "$B/server/systemd/"*.service "$B/server/systemd/"*.timer "$T/etc/systemd/system/"
 
@@ -57,7 +60,7 @@ if [ -e /dev/disk/by-label/BKIMODELLE ]; then
 fi
 
 status 90 "Richte Dienste ein (Oberfläche, Wake-on-LAN, Nacht-Updates) …"
-in_target systemctl enable butchies-ki.service butchies-wol.service butchies-nightly.timer avahi-daemon.service ssh.service || true
+in_target systemctl enable butchies-ki.service butchies-wol.service butchies-nightly.timer avahi-daemon.service ssh.service
 
 # Sicherheitsupdates automatisch; die Prüfung macht unser Nacht-Timer um 3 Uhr
 cat > "$T/etc/apt/apt.conf.d/20auto-upgrades" <<'EOF'
