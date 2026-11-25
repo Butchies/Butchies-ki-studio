@@ -695,6 +695,31 @@ async function loadStorage() {
   try {
     const d = await api("/api/storage");
     list.replaceChildren();
+    try {
+      const result = await api("/api/storage/migration-status");
+      const m = result.migration;
+      if (m && m.state !== "idle") {
+        const panel = document.createElement("section");
+        const heading = document.createElement("h3");
+        heading.textContent = "Letzte Speicherverlagerung";
+        const status = document.createElement("p");
+        status.textContent = ({running:"Verlagerung begonnen; Abschluss noch nicht bestätigt", completed:"Verlagerung abgeschlossen", failed:"Verlagerung fehlgeschlagen"})[m.state] || m.state;
+        panel.append(heading,status);
+        if (Number.isFinite(m.percent)) {
+          const bar = document.createElement("progress");
+          bar.max=100; bar.value=m.percent; bar.style.width="100%";
+          bar.setAttribute("aria-label","Zuletzt gespeicherter Verlagerungsfortschritt");
+          panel.append(bar,document.createTextNode(m.percent+" %"));
+        }
+        for (const value of [m.target, m.error, m.timestamp ? new Date(m.timestamp*1000).toLocaleString("de-DE") : ""]) {
+          if (!value) continue;
+          const line=document.createElement("p"); line.textContent=value; panel.append(line);
+        }
+        list.append(panel);
+      }
+    } catch(e) {
+      const note=document.createElement("p"); note.textContent="Verlagerungsprotokoll nicht verfügbar: "+e.message; list.append(note);
+    }
     for (const disk of d.devices) {
       const row = document.createElement("div"); row.className = "item";
       const info = document.createElement("div");
