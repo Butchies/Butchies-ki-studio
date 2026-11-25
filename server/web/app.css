@@ -200,3 +200,6 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .chat-workspace fieldset label { display: block; }
 
 .console-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+
+.setup-status { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; }
+.setup-status dd { margin: 0; overflow-wrap: anywhere; }

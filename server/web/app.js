@@ -153,6 +153,13 @@ function renderStatus(s) {
   pill.textContent = "KI: " + ls;
   pill.className = "pill " + (ls === "bereit" ? "ok" : ls === "lädt" || ls === "nicht eingerichtet" ? "warn" : "bad");
   $("send-btn").disabled = ls !== "bereit" || !!state.streaming;
+  $("ki-setup-shortcut").hidden = !["nicht eingerichtet", "abgestürzt"].includes(ls);
+  $("ki-setup-run").disabled = !!s.job?.running;
+  $("setup-engine").textContent = ls;
+  if (s.ki_setup) {
+    $("setup-runtime").textContent = s.ki_setup.runtime_installed ? "Installiert (" + s.ki_setup.backend + ")" : "Fehlt";
+    $("setup-model-status").textContent = s.ki_setup.model_installed ? (s.llama.model || "Installiert") : "Fehlt";
+  }
   const ext = s.ext || {};
   state.ext = ext;
   $("nav-images").hidden = !ext.images;
@@ -583,6 +590,8 @@ function openSettingsSection(section) {
   $("token-form").hidden = section !== "tokens";
   $("pw-form").hidden = section !== "password";
   $("connection-panel").hidden = section !== "connection";
+  $("ki-setup-panel").hidden = section !== "setup";
+  if (section === "setup") loadSetupModels();
   if (!editor) return;
   $("workspace-title").textContent = editor[0];
   $("workspace-help").textContent = editor[1];
@@ -594,6 +603,38 @@ function openSettingsSection(section) {
 }
 document.querySelectorAll("[data-settings]").forEach((b) => b.addEventListener("click", () => openSettingsSection(b.dataset.settings)));
 openSettingsSection("performance");
+async function loadSetupModels() {
+  try {
+    const { catalog, installed } = await api("/api/models");
+    const select = $("ki-setup-model");
+    const previous = select.value;
+    const local = new Set(installed.map((m) => m.id));
+    select.replaceChildren(new Option("Vorgabe aus dem Installer", ""));
+    [...catalog].sort((a, b) => a.size_gb - b.size_gb).forEach((m) => {
+      const suffix = local.has(m.id) ? "installiert" : "ca. " + m.size_gb.toLocaleString("de-DE") + " GB Download";
+      select.add(new Option(m.name + " · " + suffix, m.id));
+    });
+    if ([...select.options].some((o) => o.value === previous)) select.value = previous;
+  } catch (error) { $("ki-setup-msg").textContent = error.message; }
+}
+$("ki-setup-shortcut").addEventListener("click", () => {
+  setView("settings");
+  openSettingsSection("setup");
+});
+$("ki-setup-models").addEventListener("click", () => setView("models"));
+$("ki-setup-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const button = $("ki-setup-run");
+  button.disabled = true;
+  try {
+    await api("/api/setup/run", { model: $("ki-setup-model").value });
+    $("ki-setup-msg").textContent = "Einrichtung gestartet. Den Fortschritt siehst du oben.";
+    await pollStatus();
+  } catch (error) {
+    $("ki-setup-msg").textContent = error.message;
+    button.disabled = false;
+  }
+});
 $("workspace-reset").addEventListener("click", () => editWorkspace());
 $("workspace-file").addEventListener("change", async () => {
   const file = $("workspace-file").files[0];

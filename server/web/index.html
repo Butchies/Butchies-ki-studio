@@ -40,6 +40,7 @@
     <div class="brand"><span class="logo" aria-hidden="true"></span>Butchies KI Studio <span class="accent">Offline</span></div>
     <div class="topbar-right">
       <span class="pill ok" id="llama-pill">KI: …</span>
+      <button class="btn primary small" id="ki-setup-shortcut" type="button" hidden>KI einrichten</button>
       <button class="btn ghost small" id="logout-btn" type="button">Abmelden</button>
     </div>
   </header>
@@ -187,6 +188,7 @@
     <main class="view" id="view-settings" hidden>
       <h1>Einstellungen</h1>
       <div class="settings-sections" aria-label="Einstellungsbereiche">
+        <button class="btn small" data-settings="setup">KI einrichten</button>
         <button class="btn small" data-settings="bots">KI-Bots</button>
         <button class="btn small" data-settings="memory">Gedächtnis</button>
         <button class="btn small" data-settings="library">Bibliothek</button>
@@ -195,6 +197,23 @@
         <button class="btn small" data-settings="connection">Verbindung</button>
         <button class="btn small" data-settings="password">Passwort</button>
       </div>
+      <section id="ki-setup-panel" class="card form" hidden>
+        <h2>KI einrichten</h2>
+        <dl class="setup-status">
+          <dt>Laufzeit</dt><dd id="setup-runtime">Status wird geladen …</dd>
+          <dt>Modell</dt><dd id="setup-model-status">Status wird geladen …</dd>
+          <dt>KI-Status</dt><dd id="setup-engine">–</dd>
+        </dl>
+        <form id="ki-setup-form" class="form">
+          <label for="ki-setup-model">Modell für die Einrichtung</label>
+          <select id="ki-setup-model"><option value="">Vorgabe aus dem Installer</option></select>
+          <div class="btn-row">
+            <button class="btn primary" id="ki-setup-run" type="submit">Einrichtung starten</button>
+            <button class="btn" id="ki-setup-models" type="button">Modelle verwalten</button>
+          </div>
+        </form>
+        <p id="ki-setup-msg" role="status"></p>
+      </section>
       <section id="workspace-editor" class="card form" hidden>
         <h2 id="workspace-title"></h2>
         <p id="workspace-help" class="muted"></p>

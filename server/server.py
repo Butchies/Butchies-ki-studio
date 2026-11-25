@@ -40,7 +40,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.13"
+VERSION = "0.4.14"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -768,12 +768,15 @@ def wanted_setup():
     return models, [u for u in w.get("custom", []) if parse_hf_url(u)], [e for e in w.get("extensions", []) if e in INSTALLERS]
 
 
-def first_setup():
+def first_setup(model_id=None):
     """Ersteinrichtung: Laufzeit, gewählte Modelle (fehlende laden) und Erweiterungen."""
     if not llama_binary():
         install_llama(0, 8)
     models, custom, exts = wanted_setup()
-    have = {m["id"] for m in installed_models()} | {m["file"] for m in installed_models()}
+    if model_id:
+        models, custom = [model_id], []
+    installed = installed_models()
+    have = {m["id"] for m in installed} | {m["file"] for m in installed}
     todo = [m for m in models if m not in have] + [u for u in custom if os.path.basename(parse_hf_url(u)[2]) not in have]
     n = max(1, len(todo))
     for i, item in enumerate(todo):
@@ -782,8 +785,10 @@ def first_setup():
             download_custom(item)
         else:
             download_model(item, a, b, activate=(i == 0 and not CONFIG.get("active_model")))
-    if not CONFIG.get("active_model") and installed_models():
-        CONFIG["active_model"] = installed_models()[0]["file"]
+    installed = installed_models()
+    selected = next((m for m in installed if m["id"] == model_id), None) if model_id else None
+    if selected or (installed and CONFIG.get("active_model") not in {m["file"] for m in installed}):
+        CONFIG["active_model"] = (selected or installed[0])["file"]
         save_config(CONFIG)
     for e in exts:
         if not ext_installed(e):
@@ -1657,6 +1662,11 @@ class Handler(BaseHTTPRequestHandler):
                 "mac": read_file("/sys/class/net/%s/address" % iface) if iface else "",
                 "llama": {"state": LLAMA.state, "model": LLAMA.model, "version": llama_version(),
                           "tps": LLAMA.last_tps},
+                "ki_setup": {
+                    "runtime_installed": bool(llama_binary()),
+                    "model_installed": bool(installed_models()),
+                    "backend": CONFIG.get("backend", "vulkan"),
+                },
                 "job": JOB.snapshot(),
                 "idle_seconds": int(time.time() - ACTIVITY.last),
                 "sleep_enabled": bool(CONFIG.get("sleep_enabled")),
@@ -1871,8 +1881,12 @@ class Handler(BaseHTTPRequestHandler):
             log("Passwort geändert" + (" (auch Linux/SSH)" if data.get("linux") else ""))
             return self.send_json({"ok": True})
         if path == "/api/setup/run":
-            ok = JOB.start("Ersteinrichtung", first_setup)
-            return self.send_json({"ok": ok})
+            model_id = data.get("model") or None
+            if model_id is not None and (not isinstance(model_id, str) or not catalog_entry(model_id)):
+                return self.error("Unbekanntes Modell")
+            ok = JOB.start("Ersteinrichtung", first_setup, model_id)
+            return self.send_json({"ok": ok, "error": "" if ok else "Es läuft bereits eine andere Aufgabe"},
+                                  200 if ok else 409)
         if path == "/api/updates/run":
             ok = JOB.start("Updates", update_all, bool(data.get("llama", True)))
             return self.send_json({"ok": ok, "error": "" if ok else "Es läuft schon eine Aufgabe"})
