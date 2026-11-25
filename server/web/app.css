@@ -165,3 +165,13 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .inline-form input{flex:1;min-width:240px}
 .rec{color:var(--danger)!important;border-color:var(--danger)!important}
 .job-banner .btn{align-self:flex-start}
+
+/* Arctic Blue 5.0 */
+:root{--bg:#f1f7fd;--panel:#fff;--side:#e5f0fa;--top:#075c9f;--line:#d1e3f3;--line2:#b7d6f0;--text:#102650;--soft:#29476a;--muted:#526d8a;--accent:#0876ce;--on-accent:#fff;--accent-dark:#d6ebfc;--teal:#45ad55;--teal-text:#167638;--danger:#b52b36;--hover:#e1effb;--active:#c5e2f8;--code:#eaf2fa;color-scheme:light}
+.topbar{color:white;min-height:60px}.topbar .accent{color:#c8e7ff}.topbar .brand{font-size:18px}.topbar .pill{background:#e6f6ec;color:#146e36}
+.layout{grid-template-columns:240px minmax(0,1fr) 245px}.sidebar{padding:16px 12px}.sidebar #new-chat{order:-1;margin:0 0 12px;background:var(--accent);color:white;border:0;border-radius:9px}.nav.active{background:#c5e2f8;color:#084f8c}.side-title{text-transform:none;letter-spacing:0;font-size:14px}
+.statuspanel{background:#eaf3fb;padding:20px 16px}.statuspanel .tile{border:1px solid var(--line)}.bar{height:6px}.fill{background:#45ad55}
+#view-chat{background:linear-gradient(150deg,#f8fbff,#edf5fc)}.messages{padding:32px 26px;max-width:900px}.empty{max-width:680px;color:var(--muted)}.empty h1{font-size:32px;color:#102650}.msg.bot{background:#fff;border:1px solid var(--line);border-radius:14px;padding:18px 20px}.msg.user{background:#d6ebfc;border:1px solid #c1dff5}
+.composer{width:calc(100% - 36px);max-width:900px;margin:12px auto 24px;border:1px solid var(--line2);border-radius:16px;background:#fff;padding:12px;box-shadow:0 3px 14px #1a518b0d}.composer textarea{border:0;min-height:65px;resize:vertical}.composer textarea:focus{outline:none}.btn{border-radius:8px}.card,.item,.gate-card{border-radius:12px}.gate{background:linear-gradient(145deg,#f6faff,#dceefa)}.gate-card{box-shadow:0 12px 45px #235a921a}
+@media(max-width:1100px){.layout{grid-template-columns:210px minmax(0,1fr)}}
+@media(max-width:720px){.layout{grid-template-columns:1fr}.sidebar #new-chat{display:block;margin:0}.empty h1{font-size:25px}.composer{margin-bottom:10px}.messages{padding:18px}}
