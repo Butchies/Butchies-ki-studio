@@ -40,7 +40,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.14"
+VERSION = "0.4.15"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -604,21 +604,47 @@ LLAMA_RELEASES = "https://api.github.com/repos/ggml-org/llama.cpp/releases"
 
 def llama_release_asset(backend):
     platform = "ubuntu-vulkan-x64" if backend == "vulkan" else "ubuntu-x64"
+    def matching_asset(release):
+        tag = release.get("tag_name", "")
+        if not re.fullmatch(r"(?:b[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+)", tag) or release.get("draft"):
+            return None
+        stem = "llama-%s-bin-%s" % (tag, platform)
+        prefix = "https://github.com/ggml-org/llama.cpp/releases/download/" + tag + "/"
+        for asset in release.get("assets", []):
+            name = asset.get("name")
+            if name in (stem + ".tar.gz", stem + ".zip") and asset.get("browser_download_url") == prefix + name:
+                return tag, asset
+        return None
+
     latest = http_json(LLAMA_RELEASES + "/latest")
-    for page in range(3):
-        releases = [latest] if page == 0 else http_json(
-            LLAMA_RELEASES + "?per_page=30&page=%d" % page)
+    match = matching_asset(latest)
+    if match:
+        return match
+    tag = latest.get("tag_name", "")
+    marker = "https://github.com/ggml-org/llama.cpp/releases/download/" + tag + "/nightly-tag.txt"
+    if re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+", tag) and any(
+            asset.get("browser_download_url") == marker for asset in latest.get("assets", [])):
+        try:
+            req = urllib.request.Request(marker, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=15) as response:
+                build = response.read(40).decode("ascii").strip()
+            if re.fullmatch(r"b[0-9]+", build):
+                match = matching_asset(http_json(LLAMA_RELEASES + "/tags/" + build))
+                if match:
+                    return match
+        except (OSError, ValueError):
+            pass
+
+    for page in (1, 2):
+        releases = http_json(LLAMA_RELEASES + "?per_page=30&page=%d" % page)
         for release in releases:
-            tag = release.get("tag_name", "")
-            if not re.fullmatch(r"b[0-9]+", tag) or release.get("draft") or release.get("prerelease"):
-                continue
-            stem = "llama-%s-bin-%s" % (tag, platform)
-            for asset in release.get("assets", []):
-                if asset.get("name") in (stem + ".tar.gz", stem + ".zip") and asset.get("browser_download_url"):
-                    return tag, asset
-        if page and len(releases) < 30:
+            if re.fullmatch(r"b[0-9]+", release.get("tag_name", "")):
+                match = matching_asset(release)
+                if match:
+                    return match
+        if len(releases) < 30:
             break
-    raise RuntimeError("Kein stabiles llama.cpp-Paket für %s gefunden" % platform)
+    raise RuntimeError("Kein llama.cpp-Paket für %s in den offiziellen Builds gefunden" % platform)
 
 
 def install_llama(p_from=0, p_to=100):
