@@ -490,6 +490,54 @@ def storage_expansion_plan(uid):
             "fits": needed <= available}
 
 
+def storage_file_digest(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def storage_verified_copy(uid):
+    plan = storage_expansion_plan(uid)
+    if not plan["fits"]:
+        raise RuntimeError("Zieldatenträger hat zu wenig nutzbaren Speicher")
+    source, target = plan["source"], plan["target"]
+    mount = os.path.dirname(target)
+    device = os.stat(mount).st_dev
+    os.mkdir(target, 0o700)
+    copied = 0
+    for root, dirs, files in os.walk(source, followlinks=False):
+        relative = os.path.relpath(root, source)
+        out = os.path.join(target, relative)
+        for name in dirs:
+            src = os.path.join(root, name)
+            if os.path.islink(src):
+                raise RuntimeError("Symbolische Verknüpfung entdeckt")
+            os.mkdir(os.path.join(out, name), 0o700)
+        for name in files:
+            src, dst = os.path.join(root, name), os.path.join(out, name)
+            if os.path.islink(src) or not os.path.isfile(src):
+                raise RuntimeError("Ungültige Quelldatei")
+            before = storage_file_digest(src)
+            with open(src, "rb") as inp, open(dst, "xb") as dest:
+                while True:
+                    chunk = inp.read(1024 * 1024)
+                    if not chunk:
+                        break
+                    if not os.path.ismount(mount) or os.stat(mount).st_dev != device:
+                        raise RuntimeError("Zieldatenträger entfernt")
+                    require_storage(mount, len(chunk))
+                    dest.write(chunk)
+                dest.flush()
+                os.fsync(dest.fileno())
+            if storage_file_digest(dst) != before or storage_file_digest(src) != before:
+                raise RuntimeError("Prüfsummenabweichung: " + src)
+            copied += 1
+            JOB.progress(100 * copied / max(1, plan["files"]), "Datei geprüft: " + name)
+    log("Verifizierte Dateikopie erstellt; Quelle unverändert: " + target)
+
+
 def storage_budget(path):
     usage = shutil.disk_usage(path)
     return max(0, min(usage.free, usage.total * 9 // 10 - usage.used))
