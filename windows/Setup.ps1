@@ -627,6 +627,7 @@ $xaml = @'
           <Border Background="#DFF6DD" CornerRadius="10" Padding="10,3" HorizontalAlignment="Left" Margin="0,0,0,8"><TextBlock x:Name="KiListInfo" Foreground="#0F6B0F" FontSize="12"/></Border>
         </StackPanel>
         <StackPanel DockPanel.Dock="Bottom">
+          <Button x:Name="BtnHF" Content="Hugging Face – aktuelle GGUF-Modelle durchsuchen" Style="{StaticResource Btn}" Margin="0,4,0,4"/>
           <DockPanel Margin="0,6,0,6"><Button DockPanel.Dock="Right" x:Name="BtnCustom" Content="Hinzufügen" Style="{StaticResource Btn}" MinWidth="0" Margin="8,0,0,0"/><TextBox x:Name="CustomUrl" ToolTip="Hugging-Face-Link zu einer .gguf-Datei"/></DockPanel>
           <UniformGrid Columns="2">
             <RadioButton x:Name="RbLater" GroupName="m" IsChecked="True" Margin="0,0,6,0"><StackPanel><TextBlock Text="Mini-PC lädt selbst" FontWeight="SemiBold"/><TextBlock Foreground="#5C5C5C" Text="nach der Installation · Stick ab 4 GB"/></StackPanel></RadioButton>
@@ -847,6 +848,343 @@ $ui.BtnCustom.Add_Click({
   $u = $ui.CustomUrl.Text.Trim()
   if ($u -match '^https://huggingface\.co/[\w.\-]+/[\w.\-]+/(resolve|blob)/[\w.\-]+/.+\.gguf$') { [void]$script:custom.Add(($u -replace '/blob/', '/resolve/')); $ui.CustomUrl.Text = ""; ZeigeKiListe }
   else { [Windows.MessageBox]::Show("Bitte einen Hugging-Face-Link zu einer .gguf-Datei einfügen, z. B.`nhttps://huggingface.co/<name>/<repo>/resolve/main/<datei>.gguf", "Eigenes Modell") | Out-Null }
+})
+
+($ui.CustomUrl.Parent.Parent.FindName("BtnHF")).Add_Click({
+  try {
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    $query = [Microsoft.VisualBasic.Interaction]::InputBox("Modellname suchen (leer = neueste Modelle)", "Hugging Face", "")
+    $url = "https://huggingface.co/api/models?filter=gguf&sort=lastModified&direction=-1&limit=50"
+    if ($query) { $url += "&search=" + [Uri]::EscapeDataString($query) }
+    $repos = @(Invoke-RestMethod -Uri $url -TimeoutSec 20)
+    $pick = $repos | Select-Object id,lastModified,downloads | Out-GridView -Title "GGUF-Modell auswählen" -OutputMode Single
+    if (-not $pick) { return }
+    $files = @(Invoke-RestMethod -Uri ("https://huggingface.co/api/models/" + $pick.id + "/tree/main?recursive=true") -TimeoutSec 20)
+    $variants = $files | Where-Object { $_.type -eq "file" -and $_.path -match '\.gguf ----------------------------------------------------------------------
+function ZeigeDisks {
+  $keep = if ($ui.DiskList.SelectedItem) { $ui.DiskList.SelectedItem.Tag.Number } else { $null }
+  $ui.DiskList.Items.Clear()
+  foreach ($d in $sync.Disks) {
+    $txt = "{0}  –  {1:N1} GB  {2}" -f $d.Name, ($d.Size / 1GB), $(if ($d.Butchies) { "· Butchies-Stick, Version $($d.Version) ($($d.Letter))" } elseif ($d.Letter) { "($($d.Letter))" } else { "" })
+    $it = New-Object Windows.Controls.ListBoxItem; $it.Content = $txt; $it.Tag = $d; $it.Padding = "8,6"
+    [void]$ui.DiskList.Items.Add($it)
+    if ($keep -ne $null -and $d.Number -eq $keep) { $it.IsSelected = $true }
+  }
+  $bk = @($sync.Disks | Where-Object { $_.Butchies })
+  if ($sync.Disks.Count -eq 0) { $ui.UsbInfo.Text = "Kein USB-Stick gefunden – bitte einstecken (wird alle 3 s gesucht)." }
+  else { $ui.UsbInfo.Text = "$($sync.Disks.Count) Stick(s) gefunden" + $(if ($bk.Count) { " · davon $($bk.Count) Butchies-Stick" } else { "" }) }
+  if ($sync.Autopilot -and $ui.DiskList.SelectedIndex -lt 0 -and $ui.DiskList.Items.Count -gt 0) {
+    $pick = 0; for ($i = 0; $i -lt $ui.DiskList.Items.Count; $i++) { if ($ui.DiskList.Items[$i].Tag.Butchies) { $pick = $i } }
+    $ui.DiskList.SelectedIndex = $pick
+    if ($bk.Count) { $ui.RbHave.IsChecked = $true } else { $ui.RbNew.IsChecked = $true }
+  }
+}
+$ui.BtnRescan.Add_Click({ if (-not $sync.Busy) { Starte "scan" } })
+
+# --- Ablauf -------------------------------------------------------------------------
+function Fehler($t) { $ui.ErrText.Text = $t }
+function GeheZu($n) {
+  $script:step = $n; Fehler ""; $script:rowCache = @{}; $sync.Done = ""
+  $ui.BtnBack.IsEnabled = $n -gt 0 -and $n -ne 2 -and $n -lt 7
+  switch ($n) {
+    0 { Seite "PgWelcome"; $ui.BtnNext.Content = "Los geht's" }
+    1 { RowsSeite "Systemprüfung" "Ich schaue nach, ob Windows alles hat, was gebraucht wird." "Fehlt etwas Wichtiges, sage ich dir genau, was zu tun ist. Ist alles da, geht es von selbst weiter." $false; $ui.BtnNext.Content = "Weiter"; Starte "system" }
+    2 { RowsSeite "Windows-Teil wird installiert" "Taskleisten-Programm, Verknüpfungen, Autostart und Deinstallations-Eintrag." "Ich hole vorher die neueste Version von GitHub und richte alles für deinen PC ein." $true; $script:winStage = "payload"; Starte "payload" }
+    3 { Seite "PgUsb"; $ui.BtnNext.Content = "Weiter"; Starte "scan" }
+    4 { Seite "PgKi"; ZeigeKiListe; if (-not $script:sizesStarted) { $script:sizesStarted = $true; Starte "catalogsizes" } }
+    5 {
+      Seite "PgStick"; $d = $sync.Choice.DiskInfo
+      if ($sync.Choice.Mode -eq "neu") {
+        $ui.StickTitle.Text = "Neuen Stick erstellen"; $ui.StickSub.Text = "Lege die Zugangsdaten für den Mini-PC fest."
+        $ui.WarnBox.Visibility = "Visible"; $ui.WarnTitle.Text = ("Alles auf »{0}« ({1:N1} GB) wird gelöscht" -f $d.Name, ($d.Size / 1GB)); $ui.CbConfirm.IsChecked = $false
+      } else {
+        $ui.StickTitle.Text = "Stick abgleichen – $($d.Name) ($($d.Letter))"
+        $ui.StickSub.Text = "Auf dem Stick: $($d.Version) · neueste: $($sync.Latest). Das Passwort wird nach jeder Installation vom Stick gelöscht – bitte neu eingeben."
+        $ui.WarnBox.Visibility = "Collapsed"
+      }
+    }
+    6 { RowsSeite "Alles auf dem neuesten Stand?" "Bevor der Stick gebaut wird, prüfe ich jede Quelle und lade nur, was fehlt." "Ich suche die neuesten Versionen, prüfe Prüfsummen und wiederhole abgebrochene Downloads selbst. Einmal geladene Dateien merke ich mir (Offline-Modus)." $true; Starte "online" }
+    7 { RowsSeite "Stick wird erstellt" "Bitte den Stick nicht abziehen." "Geht etwas schief, versuche ich es automatisch erneut und zeige dir genau, woran es lag." $true; Starte "create" }
+    8 { Seite "PgDone"; $ui.BtnNext.Content = "Fertig"; $ui.BtnBack.IsEnabled = $false; $sync.StopFollow = $false; Starte "follow" }
+  }
+  $ui.BtnNext.IsEnabled = $n -in 0, 3, 4, 5, 8
+}
+
+$ui.BtnNext.Add_Click({
+  switch ($script:step) {
+    0 { GeheZu 1 }
+    1 { GeheZu 2 }
+    2 { GeheZu 3 }
+    3 {
+      $sel = $ui.DiskList.SelectedItem
+      if (-not $sel) { Fehler "Bitte einen USB-Stick auswählen."; return }
+      $d = $sel.Tag
+      if ($ui.RbHave.IsChecked -and -not $d.Butchies) { Fehler "Auf diesem Stick ist kein Butchies-Stick – wähle »Nein – neuen Stick erstellen«."; return }
+      $sync.Choice.Mode = if ($ui.RbHave.IsChecked) { "abgleich" } else { "neu" }
+      $sync.Choice.Disk = $d.Number; $sync.Choice.DiskInfo = $d; $sync.Choice.Letter = $d.Letter
+      GeheZu 4
+    }
+    4 {
+      $models = @(); $exts = @(); $custom = @(); $picked = @()
+      foreach ($cb in $script:kiChecks) {
+        if (-not $cb.IsChecked) { continue }
+        $it = $cb.Tag; $picked += "$($it.Kind):$($it.Obj.id):$($it.Obj.url)"
+        switch ($it.Kind) { "model" { $models += $it.Obj } "ext" { $exts += $it.Obj.id } "custom" { $custom += $it.Obj.url } }
+      }
+      if ($models.Count -eq 0 -and $custom.Count -eq 0) { Fehler "Bitte mindestens ein KI-Modell auswählen."; return }
+      $stick = [bool]$ui.RbStick.IsChecked
+      if ($stick) {
+        $need = 8 + ($models | ForEach-Object { if ($_.live_gb) { $_.live_gb } else { $_.size_gb } } | Measure-Object -Sum).Sum
+        $d = $sync.Choice.DiskInfo
+        if ($sync.Choice.Mode -eq "neu" -and $d.Size / 1e9 -lt $need) { Fehler ("Für Modelle auf dem Stick braucht er ca. {0:N0} GB – dieser hat {1:N0} GB." -f $need, ($d.Size / 1e9)); return }
+        if ($sync.Choice.Mode -eq "abgleich" -and -not $d.Models) { Fehler "Dieser Stick hat keinen Bereich für Modelle – dafür bitte einen neuen Stick erstellen."; return }
+        if ($custom.Count) { Fehler "Eigene Modelle lädt der Mini-PC selbst – sie kommen nicht auf den Stick."; }
+      }
+      $sync.Choice.Models = $models; $sync.Choice.Extensions = $exts; $sync.Choice.Custom = $custom; $sync.Choice.ModelsOnStick = $stick; $sync.Choice.Picked = $picked
+      GeheZu 5
+    }
+    5 {
+      $h = $ui.TbHost.Text.Trim().ToLower()
+      if ($h -notmatch '^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$') { $ui.StickErr.Text = "Name: nur Kleinbuchstaben, Ziffern und Bindestrich (max. 30)."; return }
+      if ($sync.Choice.Mode -eq "neu" -and -not $ui.CbConfirm.IsChecked) { $ui.StickErr.Text = "Bitte bestätigen, dass der Stick gelöscht werden darf."; return }
+      $ui.StickErr.Text = ""
+      $sync.Choice.Host = $h
+      $tc = Join-Path $Home2 "taskleiste.json"; @{ host = $h; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tc -Encoding UTF8
+      # Taskleisten-Programm auf den gewählten Namen umstellen
+      Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'Butchies-KI\.ps1' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+      $tp = Join-Path $Home2 "Butchies-KI.ps1"
+      if (Test-Path $tp) { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$tp`" -MiniPC $h" }
+      GeheZu 6
+    }
+    6 { GeheZu 7 }
+    7 { GeheZu 8 }
+    8 { $sync.StopFollow = $true; $w.Close() }
+  }
+})
+$ui.BtnBack.Add_Click({ if ($script:step -gt 0 -and -not $sync.Busy) { GeheZu ($script:step - 1) } })
+$ui.BtnLog.Add_Click({
+  $f = Join-Path $Home2 "setup-protokoll.txt"
+  ($sync.Log -join "`r`n") | Set-Content $f -Encoding UTF8
+  Start-Process notepad.exe $f
+})
+$ui.AutoToggle.Add_Click({
+  $sync.Autopilot = [bool]$ui.AutoToggle.IsChecked
+  $ui.AutoPill.Background = Brush $(if ($sync.Autopilot) { "#DCEEFF" } else { "#E5E5E5" })
+  $ui.AutoDot.Fill = Brush $(if ($sync.Autopilot) { "#2678C9" } else { "#8A8A8A" })
+  $ui.KiCard.Visibility = if ($sync.Autopilot -and $ui.PgRows.Visibility -eq "Visible") { "Visible" } else { "Collapsed" }
+})
+$ui.KiSelf.Add_Click({ $script:selfMode[$script:step] = $true; $ui.KiCard.Visibility = "Collapsed" })
+function AutoWeiter { $sync.Autopilot -and -not $script:selfMode[$script:step] }
+
+# --- Zeitgeber: Fortschritt anzeigen und Abläufe weiterschalten ---------------------
+$script:lastVer = -1; $script:lastScan = Get-Date
+$timer = New-Object Windows.Threading.DispatcherTimer
+$timer.Interval = [TimeSpan]::FromMilliseconds(120)
+$timer.Add_Tick({
+  if ($script:step -eq 3 -and -not $sync.Busy -and ((Get-Date) - $script:lastScan).TotalSeconds -gt 3) { $script:lastScan = Get-Date; Starte "scan" }
+  if ($sync.Ver -eq $script:lastVer) { return }
+  $script:lastVer = $sync.Ver
+  if ($ui.PgRows.Visibility -eq "Visible") {
+    ZeichneZeilen
+    if ($sync.Percent -ge 0) { $ui.BigPct.Text = "$($sync.Percent) %"; $ui.BigText.Text = $sync.PercentText; SetBlocks $ui.Blocks $sync.Percent }
+  }
+  if ($sync.Error) { Fehler ("Fehler: " + $sync.Error + "  – »Zurück« und erneut versuchen, oder »Protokoll« ansehen."); $ui.BtnBack.IsEnabled = $true }
+  switch ($sync.Done) {
+    "start" {
+      $sync.Done = ""
+      $ui.VerText.Text = "Setup $SetupVersion"
+      if ($sync.Latest) { $ui.WelcomeInfo.Text = "Neueste Butchies-Version auf GitHub: $($sync.Latest) – wird automatisch verwendet" }
+      else { $ui.WelcomeInfo.Text = "GitHub gerade nicht erreichbar – Offline-Modus mit gespeicherten Dateien" }
+    }
+    "system-ok" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 2 } }
+    "system-fail" { $sync.Done = ""; Fehler "Bitte die rot markierten Punkte beheben und mit »Zurück« erneut prüfen." }
+    "payload" { $sync.Done = ""; if ($sync.ExtractDir) { Starte "windows" } }
+    "windows" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 3 } }
+    "scan" { $sync.Done = ""; ZeigeDisks }
+    "catalogsizes" { $sync.Done = ""; if ($script:step -eq 4) { ZeigeKiListe } }
+    "online" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 7 } }
+    "create" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; $ui.BtnNext.Content = "Weiter"; if (AutoWeiter) { GeheZu 8 } }
+  }
+  if ($script:step -eq 8 -and $sync.Follow) {
+    $f = $sync.Follow
+    $ui.FPhase.Text = "Mini-PC: $($f.Phase)"; $ui.FPct.Text = "$($f.Percent) %"; $ui.FText.Text = $f.Text; SetBlocks $ui.FBlocks $f.Percent
+    $ui.FConsole.Text = ($sync.Log | Select-Object -Last 100) -join "`n"; $ui.FConsole.ScrollToEnd()
+  }
+})
+$timer.Start()
+
+$w.Add_Closing({ $sync.StopFollow = $true })
+GeheZu 0
+Starte "start"
+[void]$w.ShowDialog()
+ -and $_.path -notmatch '-\d{5}-of-\d{5}\.gguf ----------------------------------------------------------------------
+function ZeigeDisks {
+  $keep = if ($ui.DiskList.SelectedItem) { $ui.DiskList.SelectedItem.Tag.Number } else { $null }
+  $ui.DiskList.Items.Clear()
+  foreach ($d in $sync.Disks) {
+    $txt = "{0}  –  {1:N1} GB  {2}" -f $d.Name, ($d.Size / 1GB), $(if ($d.Butchies) { "· Butchies-Stick, Version $($d.Version) ($($d.Letter))" } elseif ($d.Letter) { "($($d.Letter))" } else { "" })
+    $it = New-Object Windows.Controls.ListBoxItem; $it.Content = $txt; $it.Tag = $d; $it.Padding = "8,6"
+    [void]$ui.DiskList.Items.Add($it)
+    if ($keep -ne $null -and $d.Number -eq $keep) { $it.IsSelected = $true }
+  }
+  $bk = @($sync.Disks | Where-Object { $_.Butchies })
+  if ($sync.Disks.Count -eq 0) { $ui.UsbInfo.Text = "Kein USB-Stick gefunden – bitte einstecken (wird alle 3 s gesucht)." }
+  else { $ui.UsbInfo.Text = "$($sync.Disks.Count) Stick(s) gefunden" + $(if ($bk.Count) { " · davon $($bk.Count) Butchies-Stick" } else { "" }) }
+  if ($sync.Autopilot -and $ui.DiskList.SelectedIndex -lt 0 -and $ui.DiskList.Items.Count -gt 0) {
+    $pick = 0; for ($i = 0; $i -lt $ui.DiskList.Items.Count; $i++) { if ($ui.DiskList.Items[$i].Tag.Butchies) { $pick = $i } }
+    $ui.DiskList.SelectedIndex = $pick
+    if ($bk.Count) { $ui.RbHave.IsChecked = $true } else { $ui.RbNew.IsChecked = $true }
+  }
+}
+$ui.BtnRescan.Add_Click({ if (-not $sync.Busy) { Starte "scan" } })
+
+# --- Ablauf -------------------------------------------------------------------------
+function Fehler($t) { $ui.ErrText.Text = $t }
+function GeheZu($n) {
+  $script:step = $n; Fehler ""; $script:rowCache = @{}; $sync.Done = ""
+  $ui.BtnBack.IsEnabled = $n -gt 0 -and $n -ne 2 -and $n -lt 7
+  switch ($n) {
+    0 { Seite "PgWelcome"; $ui.BtnNext.Content = "Los geht's" }
+    1 { RowsSeite "Systemprüfung" "Ich schaue nach, ob Windows alles hat, was gebraucht wird." "Fehlt etwas Wichtiges, sage ich dir genau, was zu tun ist. Ist alles da, geht es von selbst weiter." $false; $ui.BtnNext.Content = "Weiter"; Starte "system" }
+    2 { RowsSeite "Windows-Teil wird installiert" "Taskleisten-Programm, Verknüpfungen, Autostart und Deinstallations-Eintrag." "Ich hole vorher die neueste Version von GitHub und richte alles für deinen PC ein." $true; $script:winStage = "payload"; Starte "payload" }
+    3 { Seite "PgUsb"; $ui.BtnNext.Content = "Weiter"; Starte "scan" }
+    4 { Seite "PgKi"; ZeigeKiListe; if (-not $script:sizesStarted) { $script:sizesStarted = $true; Starte "catalogsizes" } }
+    5 {
+      Seite "PgStick"; $d = $sync.Choice.DiskInfo
+      if ($sync.Choice.Mode -eq "neu") {
+        $ui.StickTitle.Text = "Neuen Stick erstellen"; $ui.StickSub.Text = "Lege die Zugangsdaten für den Mini-PC fest."
+        $ui.WarnBox.Visibility = "Visible"; $ui.WarnTitle.Text = ("Alles auf »{0}« ({1:N1} GB) wird gelöscht" -f $d.Name, ($d.Size / 1GB)); $ui.CbConfirm.IsChecked = $false
+      } else {
+        $ui.StickTitle.Text = "Stick abgleichen – $($d.Name) ($($d.Letter))"
+        $ui.StickSub.Text = "Auf dem Stick: $($d.Version) · neueste: $($sync.Latest). Das Passwort wird nach jeder Installation vom Stick gelöscht – bitte neu eingeben."
+        $ui.WarnBox.Visibility = "Collapsed"
+      }
+    }
+    6 { RowsSeite "Alles auf dem neuesten Stand?" "Bevor der Stick gebaut wird, prüfe ich jede Quelle und lade nur, was fehlt." "Ich suche die neuesten Versionen, prüfe Prüfsummen und wiederhole abgebrochene Downloads selbst. Einmal geladene Dateien merke ich mir (Offline-Modus)." $true; Starte "online" }
+    7 { RowsSeite "Stick wird erstellt" "Bitte den Stick nicht abziehen." "Geht etwas schief, versuche ich es automatisch erneut und zeige dir genau, woran es lag." $true; Starte "create" }
+    8 { Seite "PgDone"; $ui.BtnNext.Content = "Fertig"; $ui.BtnBack.IsEnabled = $false; $sync.StopFollow = $false; Starte "follow" }
+  }
+  $ui.BtnNext.IsEnabled = $n -in 0, 3, 4, 5, 8
+}
+
+$ui.BtnNext.Add_Click({
+  switch ($script:step) {
+    0 { GeheZu 1 }
+    1 { GeheZu 2 }
+    2 { GeheZu 3 }
+    3 {
+      $sel = $ui.DiskList.SelectedItem
+      if (-not $sel) { Fehler "Bitte einen USB-Stick auswählen."; return }
+      $d = $sel.Tag
+      if ($ui.RbHave.IsChecked -and -not $d.Butchies) { Fehler "Auf diesem Stick ist kein Butchies-Stick – wähle »Nein – neuen Stick erstellen«."; return }
+      $sync.Choice.Mode = if ($ui.RbHave.IsChecked) { "abgleich" } else { "neu" }
+      $sync.Choice.Disk = $d.Number; $sync.Choice.DiskInfo = $d; $sync.Choice.Letter = $d.Letter
+      GeheZu 4
+    }
+    4 {
+      $models = @(); $exts = @(); $custom = @(); $picked = @()
+      foreach ($cb in $script:kiChecks) {
+        if (-not $cb.IsChecked) { continue }
+        $it = $cb.Tag; $picked += "$($it.Kind):$($it.Obj.id):$($it.Obj.url)"
+        switch ($it.Kind) { "model" { $models += $it.Obj } "ext" { $exts += $it.Obj.id } "custom" { $custom += $it.Obj.url } }
+      }
+      if ($models.Count -eq 0 -and $custom.Count -eq 0) { Fehler "Bitte mindestens ein KI-Modell auswählen."; return }
+      $stick = [bool]$ui.RbStick.IsChecked
+      if ($stick) {
+        $need = 8 + ($models | ForEach-Object { if ($_.live_gb) { $_.live_gb } else { $_.size_gb } } | Measure-Object -Sum).Sum
+        $d = $sync.Choice.DiskInfo
+        if ($sync.Choice.Mode -eq "neu" -and $d.Size / 1e9 -lt $need) { Fehler ("Für Modelle auf dem Stick braucht er ca. {0:N0} GB – dieser hat {1:N0} GB." -f $need, ($d.Size / 1e9)); return }
+        if ($sync.Choice.Mode -eq "abgleich" -and -not $d.Models) { Fehler "Dieser Stick hat keinen Bereich für Modelle – dafür bitte einen neuen Stick erstellen."; return }
+        if ($custom.Count) { Fehler "Eigene Modelle lädt der Mini-PC selbst – sie kommen nicht auf den Stick."; }
+      }
+      $sync.Choice.Models = $models; $sync.Choice.Extensions = $exts; $sync.Choice.Custom = $custom; $sync.Choice.ModelsOnStick = $stick; $sync.Choice.Picked = $picked
+      GeheZu 5
+    }
+    5 {
+      $h = $ui.TbHost.Text.Trim().ToLower()
+      if ($h -notmatch '^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$') { $ui.StickErr.Text = "Name: nur Kleinbuchstaben, Ziffern und Bindestrich (max. 30)."; return }
+      if ($sync.Choice.Mode -eq "neu" -and -not $ui.CbConfirm.IsChecked) { $ui.StickErr.Text = "Bitte bestätigen, dass der Stick gelöscht werden darf."; return }
+      $ui.StickErr.Text = ""
+      $sync.Choice.Host = $h
+      $tc = Join-Path $Home2 "taskleiste.json"; @{ host = $h; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tc -Encoding UTF8
+      # Taskleisten-Programm auf den gewählten Namen umstellen
+      Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'Butchies-KI\.ps1' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+      $tp = Join-Path $Home2 "Butchies-KI.ps1"
+      if (Test-Path $tp) { Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$tp`" -MiniPC $h" }
+      GeheZu 6
+    }
+    6 { GeheZu 7 }
+    7 { GeheZu 8 }
+    8 { $sync.StopFollow = $true; $w.Close() }
+  }
+})
+$ui.BtnBack.Add_Click({ if ($script:step -gt 0 -and -not $sync.Busy) { GeheZu ($script:step - 1) } })
+$ui.BtnLog.Add_Click({
+  $f = Join-Path $Home2 "setup-protokoll.txt"
+  ($sync.Log -join "`r`n") | Set-Content $f -Encoding UTF8
+  Start-Process notepad.exe $f
+})
+$ui.AutoToggle.Add_Click({
+  $sync.Autopilot = [bool]$ui.AutoToggle.IsChecked
+  $ui.AutoPill.Background = Brush $(if ($sync.Autopilot) { "#DCEEFF" } else { "#E5E5E5" })
+  $ui.AutoDot.Fill = Brush $(if ($sync.Autopilot) { "#2678C9" } else { "#8A8A8A" })
+  $ui.KiCard.Visibility = if ($sync.Autopilot -and $ui.PgRows.Visibility -eq "Visible") { "Visible" } else { "Collapsed" }
+})
+$ui.KiSelf.Add_Click({ $script:selfMode[$script:step] = $true; $ui.KiCard.Visibility = "Collapsed" })
+function AutoWeiter { $sync.Autopilot -and -not $script:selfMode[$script:step] }
+
+# --- Zeitgeber: Fortschritt anzeigen und Abläufe weiterschalten ---------------------
+$script:lastVer = -1; $script:lastScan = Get-Date
+$timer = New-Object Windows.Threading.DispatcherTimer
+$timer.Interval = [TimeSpan]::FromMilliseconds(120)
+$timer.Add_Tick({
+  if ($script:step -eq 3 -and -not $sync.Busy -and ((Get-Date) - $script:lastScan).TotalSeconds -gt 3) { $script:lastScan = Get-Date; Starte "scan" }
+  if ($sync.Ver -eq $script:lastVer) { return }
+  $script:lastVer = $sync.Ver
+  if ($ui.PgRows.Visibility -eq "Visible") {
+    ZeichneZeilen
+    if ($sync.Percent -ge 0) { $ui.BigPct.Text = "$($sync.Percent) %"; $ui.BigText.Text = $sync.PercentText; SetBlocks $ui.Blocks $sync.Percent }
+  }
+  if ($sync.Error) { Fehler ("Fehler: " + $sync.Error + "  – »Zurück« und erneut versuchen, oder »Protokoll« ansehen."); $ui.BtnBack.IsEnabled = $true }
+  switch ($sync.Done) {
+    "start" {
+      $sync.Done = ""
+      $ui.VerText.Text = "Setup $SetupVersion"
+      if ($sync.Latest) { $ui.WelcomeInfo.Text = "Neueste Butchies-Version auf GitHub: $($sync.Latest) – wird automatisch verwendet" }
+      else { $ui.WelcomeInfo.Text = "GitHub gerade nicht erreichbar – Offline-Modus mit gespeicherten Dateien" }
+    }
+    "system-ok" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 2 } }
+    "system-fail" { $sync.Done = ""; Fehler "Bitte die rot markierten Punkte beheben und mit »Zurück« erneut prüfen." }
+    "payload" { $sync.Done = ""; if ($sync.ExtractDir) { Starte "windows" } }
+    "windows" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 3 } }
+    "scan" { $sync.Done = ""; ZeigeDisks }
+    "catalogsizes" { $sync.Done = ""; if ($script:step -eq 4) { ZeigeKiListe } }
+    "online" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 7 } }
+    "create" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; $ui.BtnNext.Content = "Weiter"; if (AutoWeiter) { GeheZu 8 } }
+  }
+  if ($script:step -eq 8 -and $sync.Follow) {
+    $f = $sync.Follow
+    $ui.FPhase.Text = "Mini-PC: $($f.Phase)"; $ui.FPct.Text = "$($f.Percent) %"; $ui.FText.Text = $f.Text; SetBlocks $ui.FBlocks $f.Percent
+    $ui.FConsole.Text = ($sync.Log | Select-Object -Last 100) -join "`n"; $ui.FConsole.ScrollToEnd()
+  }
+})
+$timer.Start()
+
+$w.Add_Closing({ $sync.StopFollow = $true })
+GeheZu 0
+Starte "start"
+[void]$w.ShowDialog()
+ } | Select-Object path,@{Name="GB";Expression={[math]::Round($_.size/1GB,2)}}
+    $chosen = @($variants | Out-GridView -Title "GGUF-Varianten auswählen (mehrere möglich)" -PassThru)
+    $sync.Choice.Picked = @($script:kiChecks | Where-Object IsChecked | ForEach-Object { "$($_.Tag.Kind):$($_.Tag.Obj.id):$($_.Tag.Obj.url)" })
+    foreach ($f in $chosen) {
+      $encoded = (($f.path -split '/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
+      $u = "https://huggingface.co/" + $pick.id + "/resolve/main/" + $encoded
+      if ($script:custom -notcontains $u) { [void]$script:custom.Add($u) }
+      $sync.Choice.Picked += "custom:custom:$u"
+    }
+    ZeigeKiListe
+  } catch { [Windows.MessageBox]::Show($_.Exception.Message,"Hugging Face") | Out-Null }
 })
 
 # --- USB-Liste ----------------------------------------------------------------------
