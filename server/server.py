@@ -44,7 +44,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.20"
+VERSION = "0.4.21"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -727,8 +727,11 @@ def install_llama(p_from=0, p_to=100, upgrade_only=False):
     ensure_llama_dependencies(p_from)
     backend = CONFIG.get("backend", "vulkan")
     JOB.progress(p_from, "Suche neueste KI-Laufzeit (llama.cpp, %s) …" % backend)
-    tag, asset = llama_release_asset(backend)
     installed = llama_version() if llama_binary() else ""
+    if upgrade_only and installed == "b12621" and (CONFIG.get("active_model") or "").lower().startswith("inkling-2-mini"):
+        JOB.progress(p_to, "KI-Laufzeit b12621 bleibt für Inkling 2 Mini installiert.")
+        return
+    tag, asset = llama_release_asset(backend)
     if upgrade_only and installed and not llama_upgrade_available(installed, tag):
         JOB.progress(p_to, "Vorhandene KI-Laufzeit %s bleibt installiert." % installed)
         return
@@ -993,7 +996,14 @@ class Llama:
             logf = open(os.path.join(DATA_DIR, "llama-%s.log" % ("server" if self.kind == "main" else self.kind)), "ab")
             log("Starte %s mit %s (%d Threads, GPU-Schichten %s)" % (
                 "KI-Laufzeit" if self.kind == "main" else "Bild-KI", model, threads, CONFIG.get("gpu_layers", 0)))
-            self.proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, env=env)
+            try:
+                with logf:
+                    self.proc = subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT, env=env)
+            except OSError as error:
+                self.model = model
+                self.state = "abgestürzt"
+                log("KI-Laufzeit konnte nicht gestartet werden: %s" % error)
+                return
             self.model = model
             self.state = "lädt"
             self.started = time.time()
@@ -1017,7 +1027,8 @@ class Llama:
                 self.proc = None
                 self.crashes += 1
                 self.state = "abgestürzt"
-                log("KI-Laufzeit beendet (Code %s). Letzte Zeilen in llama-server.log" % code)
+                log("KI-Laufzeit beendet (Code %s). Letzte Zeilen in llama-%s.log" %
+                    (code, "server" if self.kind == "main" else self.kind))
                 if self.crashes >= 3:
                     log("KI-Laufzeit stürzt wiederholt ab – Tipp: unter Einstellungen 'Prozessor (CPU)' als Laufzeit wählen.")
                     continue
@@ -1667,7 +1678,9 @@ def llama_upgrade_available(installed, candidate):
 
 def updates_available():
     out = []
-    if llama_version() and llama_upgrade_available(llama_version(), UPDATE_INFO["llama_latest"]):
+    installed = llama_version()
+    inkling_pin = installed == "b12621" and (CONFIG.get("active_model") or "").lower().startswith("inkling-2-mini")
+    if installed and not inkling_pin and llama_upgrade_available(installed, UPDATE_INFO["llama_latest"]):
         out.append("KI-Laufzeit")
     if UPDATE_INFO["app_latest"] and version_tuple(UPDATE_INFO["app_latest"]) > version_tuple(VERSION):
         out.append("Butchies KI Studio " + UPDATE_INFO["app_latest"])
@@ -1793,6 +1806,30 @@ STATIC = {
     "/app.js": ("app.js", "application/javascript; charset=utf-8"),
     "/app.css": ("app.css", "text/css; charset=utf-8"),
 }
+
+
+HUB_CATEGORIES = {"text-generation", "image-text-to-text", "text-to-image", "image-to-image",
+                  "text-to-video", "automatic-speech-recognition", "text-to-speech", "text-to-audio"}
+
+
+def discover_hub(kind, category, query, order):
+    fields = {"limit": 24, "sort": "lastModified" if order == "updated" else "likes", "direction": -1}
+    if category and kind == "models":
+        fields["pipeline_tag"] = category
+    if query:
+        fields["search"] = query
+    rows = http_json("https://huggingface.co/api/" + kind + "?" + urllib.parse.urlencode(fields), timeout=12)
+    if not isinstance(rows, list):
+        raise ValueError("Unerwartete Antwort vom Hugging Face Hub.")
+    results = []
+    for row in rows[:24]:
+        repo = row.get("id", "")
+        if not isinstance(repo, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
+            continue
+        link = "https://huggingface.co/" + ("spaces/" if kind == "spaces" else "") + repo
+        results.append({"name": repo, "url": link, "category": row.get("pipeline_tag") or row.get("sdk") or "",
+                        "updated": row.get("lastModified") or "", "likes": row.get("likes", 0)})
+    return results
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -1925,6 +1962,18 @@ class Handler(BaseHTTPRequestHandler):
                 "image_engines": (["local"] if ext_installed("images") else []) + list(CONFIG.get("comfy_profiles", {})),
                 "vision": VISION.state,
             })
+        if path == "/api/discover":
+            params = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+            kind = params.get("kind", ["models"])[0]
+            category = params.get("category", [""])[0]
+            query = params.get("q", [""])[0].strip()
+            order = params.get("order", ["updated"])[0]
+            if kind not in ("models", "spaces") or (category and category not in HUB_CATEGORIES) or len(query) > 100:
+                return self.error("Ungültige Hub-Suche")
+            try:
+                return self.send_json({"ok": True, "results": discover_hub(kind, category, query, order)})
+            except (OSError, ValueError):
+                return self.error("Hugging Face ist gerade nicht erreichbar. Bitte später erneut versuchen.", 502)
         if path == "/api/models":
             return self.send_json({"ok": True, "catalog": CATALOG, "installed": installed_models(),
                                    "free": shutil.disk_usage(DATA_DIR if os.path.isdir(DATA_DIR) else "/").free})

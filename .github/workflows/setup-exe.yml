@@ -27,6 +27,11 @@ jobs:
         run: |
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module ps2exe -Scope CurrentUser -Force
+      - name: Windows-Desktop-App bauen
+        shell: powershell
+        run: |
+          dotnet publish windows/Desktop/Butchies-KI-Studio.csproj -c Release -o "$env:RUNNER_TEMP\studio-desktop"
+          if ($LASTEXITCODE -ne 0) { throw "Desktop-Build fehlgeschlagen." }
       - name: Paket in Setup einbetten
         shell: powershell
         run: |
@@ -35,6 +40,7 @@ jobs:
           Copy-Item -Recurse installer, server -Destination $tmp
           Copy-Item VERSION, modelle.json, Anleitung.pdf, ANLEITUNG.md -Destination $tmp
           Copy-Item windows\Butchies-KI.ps1 "$tmp\windows\"
+          Copy-Item -Recurse "$env:RUNNER_TEMP\studio-desktop" "$tmp\windows\desktop-app"
           $zip = Join-Path $env:RUNNER_TEMP "payload.zip"
           Compress-Archive -Path $tmp -DestinationPath $zip -Force
           $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($zip))

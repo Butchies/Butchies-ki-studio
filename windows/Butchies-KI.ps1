@@ -73,7 +73,7 @@ $sync = [hashtable]::Synchronized(@{
   Remember = (Test-Path $pwFile); State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
-  TrayVersion = "0.4.20"; UpdateCache = (Join-Path $cfgDir "cache")
+  TrayVersion = "0.4.21"; UpdateCache = (Join-Path $cfgDir "cache")
   WindowsUpdate = $null; Updating = $false; UpdateNotice = ""
 })
 
@@ -430,14 +430,9 @@ function Brush($hex) { (New-Object Windows.Media.BrushConverter).ConvertFromStri
 
 function OeffneOberflaeche {
   $sync.Queue.Enqueue("wake") | Out-Null
-  $acc = (WindowsDesign).Accent.TrimStart("#")
-  $url = "http://localhost:8765/?accent=$acc"
-  $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-  if ($edge) {
-    $prof = Join-Path $cfgDir "edge-profil"
-    $origins = "http://$($sync.Host)" + $(if ($sync.Ip) { ",http://$($sync.Ip)" } else { "" })
-    Start-Process $edge -ArgumentList "--app=$url", "--user-data-dir=`"$prof`"", "--window-size=1400,900", "--unsafely-treat-insecure-origin-as-secure=$origins"
-  } else { Start-Process $url }
+  $desktop = Join-Path $cfgDir "desktop-app\Butchies-KI-Studio.exe"
+  if (Test-Path $desktop) { Start-Process -FilePath $desktop }
+  else { [Windows.Forms.MessageBox]::Show("Die Desktop-App fehlt. Führe den aktuellen Butchies-KI-Installer aus.", "Butchies KI Studio") | Out-Null }
 }
 
 function ZeigeFenster {

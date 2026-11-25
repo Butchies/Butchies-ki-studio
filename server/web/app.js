@@ -109,15 +109,53 @@ document.querySelectorAll(".nav").forEach((b) => b.addEventListener("click", () 
 function setView(v) {
   state.view = v;
   $("app").dataset.view = v;
-  document.querySelectorAll(".nav").forEach((b) => b.classList.toggle("active", b.dataset.view === v));
-  ["chat", "models", "system", "settings", "ext", "images"].forEach((n) => { $("view-" + n).hidden = n !== v; });
+  document.querySelectorAll(".nav").forEach((b) => {
+    const active = b.dataset.view === v;
+    b.classList.toggle("active", active);
+    if (active) b.setAttribute("aria-current", "page");
+    else b.removeAttribute("aria-current");
+  });
+  ["chat", "models", "system", "settings", "ext", "images", "discover"].forEach((n) => { $("view-" + n).hidden = n !== v; });
   if (v === "models") loadModels();
+  if (v === "discover") loadDiscovery();
   if (v === "ext") loadExt();
   if (v === "images") loadImages();
   if (v === "system") { loadUpdates(); loadLogs(); }
   if (v === "settings") { loadSettings(); loadWorkspace(); }
   if (v === "chat") { loadWorkspace(); refreshChatModels(); }
 }
+
+let discoveryRequest = 0;
+async function loadDiscovery() {
+  const id = ++discoveryRequest;
+  const box = $("discover-results");
+  const status = $("discover-status");
+  const kind = $("discover-kind").value;
+  const params = new URLSearchParams({ kind, order: $("discover-order").value, q: $("discover-query").value.trim() });
+  if (kind === "models") params.set("category", $("discover-category").value);
+  box.replaceChildren();
+  status.textContent = "Suche auf Hugging Face …";
+  try {
+    const { results } = await api("/api/discover?" + params);
+    if (id !== discoveryRequest) return;
+    status.textContent = results.length ? results.length + " Treffer" : "Keine Treffer.";
+    for (const result of results) {
+      const card = document.createElement("article"); card.className = "card hub-result";
+      const link = document.createElement("a");
+      link.href = result.url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      link.textContent = result.name;
+      const info = document.createElement("p"); info.className = "muted";
+      const date = result.updated ? new Date(result.updated) : null;
+      info.textContent = [result.category, date && !isNaN(+date) ? date.toLocaleDateString("de-DE") : "", result.likes + " Likes"].filter(Boolean).join(" · ");
+      card.append(link, info); box.appendChild(card);
+    }
+  } catch (error) { if (id === discoveryRequest) status.textContent = error.message; }
+}
+$("discover-form").addEventListener("submit", (event) => { event.preventDefault(); loadDiscovery(); });
+$("discover-kind").addEventListener("change", () => {
+  $("discover-category").disabled = $("discover-kind").value !== "models";
+  loadDiscovery();
+});
 
 // ---------------------------------------------------------------- Status
 function blocks(el, percent) {

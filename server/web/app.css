@@ -299,3 +299,19 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
   .studio-welcome { padding: 14px; }
   .composer { width: calc(100% - 16px); margin-bottom: 8px; }
 }
+
+.view:not(#view-chat) { padding: clamp(16px, 3vw, 30px); }
+.view:not(#view-chat) > h1, .section-heading h1 { font-size: clamp(24px, 3vw, 32px); letter-spacing: -.025em; }
+.view:not(#view-chat) .card { border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); box-shadow: 0 2px 7px #163d6310; }
+.view:not(#view-chat) .form { max-width: 100%; }
+.view .form textarea, .view .form input, .view .form select { max-width: 100%; }
+.settings-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(122px, 1fr)); gap: 7px; padding: 9px; border-radius: 12px; background: var(--side); border: 1px solid var(--line); }
+.settings-sections .btn { white-space: normal; line-height: 1.2; height: auto; min-height: 44px; padding: 6px; }
+.settings-sections .btn[aria-pressed="true"] { background: #07558e; color: white; }
+.section-heading { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; }
+.hub-controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; align-items: end; margin-top: 14px; }
+.hub-controls label { display: grid; gap: 5px; }
+.hub-controls :is(input, select) { min-width: 0; width: 100%; }
+.hub-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
+.hub-result a { font-weight: 650; overflow-wrap: anywhere; }
+.hub-result p { margin: 5px 0 0; }

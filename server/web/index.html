@@ -42,6 +42,7 @@
       <button class="nav active" data-view="chat" type="button">Chat</button>
       <button class="nav" data-view="models" type="button">Modelle</button>
       <button class="nav" data-view="system" type="button">Server</button>
+      <button class="nav" data-view="discover" type="button">Entdecken</button>
       <button class="nav" data-view="settings" type="button">Einstellungen</button>
     </nav>
     <div class="topbar-right">
@@ -119,6 +120,24 @@
           <button class="btn primary" type="submit" id="send-btn">Senden</button>
         </div>
       </form>
+    </main>
+
+    <main class="view" id="view-discover" hidden>
+      <div class="section-heading"><h1>Hugging Face entdecken</h1><a href="https://huggingface.co/" target="_blank" rel="noopener noreferrer">Hugging Face öffnen</a></div>
+      <form id="discover-form" class="card hub-controls">
+        <label>Bereich <select id="discover-kind"><option value="models">KI-Modelle</option><option value="spaces">Apps (Spaces)</option></select></label>
+        <label>Kategorie <select id="discover-category">
+          <option value="">Alle Kategorien</option><option value="text-generation">Chat und Text</option>
+          <option value="image-text-to-text">Bilder verstehen</option><option value="text-to-image">Bilder erzeugen</option>
+          <option value="image-to-image">Bildbearbeitung</option><option value="text-to-video">Video</option>
+          <option value="automatic-speech-recognition">Sprache erkennen</option><option value="text-to-speech">Vorlesen</option>
+          <option value="text-to-audio">Audio und Musik</option>
+        </select></label>
+        <label>Sortieren <select id="discover-order"><option value="updated">Zuletzt aktualisiert</option><option value="popular">Beliebt</option></select></label>
+        <label>Suchbegriff <input id="discover-query" maxlength="100" type="search"></label>
+        <button class="btn primary" type="submit">Suchen</button>
+      </form>
+      <p id="discover-status" role="status"></p><div id="discover-results" class="hub-results"></div>
     </main>
 
     <!-- Modelle -->
