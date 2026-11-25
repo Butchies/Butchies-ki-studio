@@ -38,12 +38,38 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.6"
+VERSION = "5.0.0"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
 ETC_DIR = os.environ.get("BKI_ETC", "/etc/butchies-ki")
-DATA_DIR = os.environ.get("BKI_DATA", "/var/lib/butchies-ki")
+def resolve_data_directory():
+    default = os.environ.get("BKI_DATA", "/var/lib/butchies-ki")
+    if "BKI_DATA" in os.environ:
+        return default
+    config_path = os.path.join(ETC_DIR, "config.json")
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            selected = json.load(f).get("active_storage")
+    except FileNotFoundError:
+        return default
+    if not selected:
+        return default
+    uid = selected["uuid"]
+    mount = selected["mountpoint"]
+    if not os.path.ismount(mount):
+        raise RuntimeError("Aktiver Datenträger fehlt: " + mount)
+    actual = subprocess.check_output(["findmnt", "-n", "-o", "UUID", "--mountpoint", mount],
+                                     text=True, timeout=8).strip()
+    if not uid or actual != uid:
+        raise RuntimeError("UUID des aktiven Datenträgers stimmt nicht")
+    target = os.path.join(mount, "butchies-ki-data")
+    if not os.path.isdir(target) or os.path.islink(target):
+        raise RuntimeError("Aktives Datenverzeichnis fehlt")
+    return target
+
+
+DATA_DIR = resolve_data_directory()
 MODEL_DIR = os.path.join(DATA_DIR, "models")
 LLAMA_DIR = os.path.join(DATA_DIR, "llama")
 CONFIG_PATH = os.path.join(ETC_DIR, "config.json")
