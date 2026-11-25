@@ -143,6 +143,8 @@ function renderStatus(s) {
   const ram = fmtGB(s.mem_used) + " / " + fmtGB(s.mem_total);
   $("p-ram").textContent = ram; setBar("pb-ram", s.mem_used / s.mem_total);
   $("p-cpu").textContent = s.cpu + " %"; setBar("pb-cpu", s.cpu / 100);
+  $("p-disk").textContent = s.disk_total ? Math.round(100*s.disk_used/s.disk_total)+" %" : "–"; setBar("pb-disk", s.disk_total ? s.disk_used/s.disk_total : 0);
+  $("p-temp").textContent = s.temp == null ? "–" : s.temp+" °C";
   $("p-tps").textContent = s.llama.tps ? String(s.llama.tps).replace(".", ",") + " T/s" : "–";
   $("p-model").textContent = s.llama.model ? s.llama.model.replace(/\.gguf$/, "") : "–";
   $("p-sleep").textContent = s.sleep_blockers.length
@@ -281,7 +283,7 @@ function renderMessages() {
   const box = $("messages"); box.innerHTML = "";
   const c = currentChat();
   if (!c || !c.messages.length) {
-    box.innerHTML = '<div class="empty"><h1>Was soll ich für dich tun?</h1><p>Frag nach Code, lass dir Fehler erklären oder füge eine Textdatei ein. Alles bleibt auf deinem Mini-PC.</p></div>';
+    box.innerHTML = '<div class="empty"><h1>Willkommen im<br>Butchies KI Studio 5.0</h1><p>Dein persönlicher KI-Assistent auf dem eigenen Server.</p><div class="welcome-actions"><button class="btn" data-quick="chat">Chatten</button><button class="btn" data-quick="models">Modelle</button><button class="btn" data-quick="system">Server</button><button class="btn" data-quick="settings">Einstellungen</button></div></div>';
     return;
   }
   c.messages.forEach((m) => box.appendChild(messageEl(m)));
@@ -662,3 +664,6 @@ $("gate-recover").addEventListener("click", async () => {
   if (pw.length < 4 || pw !== prompt("Neues Passwort wiederholen")) { $("gate-error").textContent = "Passwörter prüfen."; return; }
   try { await api("/api/recover", {code, password: pw}); showGate(false); $("gate-error").textContent = "Passwort geändert. Bitte anmelden."; } catch(e) { $("gate-error").textContent = e.message; }
 });
+
+$("sidebar-toggle").addEventListener("click", () => document.querySelector(".layout").classList.toggle("sidebar-collapsed"));
+$("messages").addEventListener("click", e => { const b=e.target.closest("[data-quick]"); if(b) document.querySelector(`.nav[data-view="${b.dataset.quick}"]`)?.click(); });
