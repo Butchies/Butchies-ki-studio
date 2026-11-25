@@ -865,9 +865,19 @@ async function openKnowledge() {
   const content=make("textarea");content.placeholder="Wissenseintrag";content.style.width="100%";
   const list=make("div");let editing=null;const selected=new Set();
   const usageInfo=make("p"); const categoryInfo=make("div");
-  let categoryFilter=null;
-  async function load(){
-    const result=await api("/api/knowledge/search",{query:query.value,category:categoryFilter});
+  let categoryFilter=null, cursor=null, nextCursor=null, history=[], activeQuery="", activeCategory=null, requestId=0;
+  const pageInfo=make("span");
+  const prev=button("Zurück",()=>{if(history.length)return load(history.pop(),false);});
+  const next=button("Weiter",()=>{if(nextCursor!==null){history.push(cursor);return load(nextCursor,false);}});
+  async function load(before=null,reset=true){
+    if(reset){history=[];activeQuery=query.value;activeCategory=categoryFilter;}
+    const id=++requestId;
+    prev.disabled=true;next.disabled=true;
+    const result=await api("/api/knowledge/search",{query:activeQuery,category:activeCategory,before});
+    if(id!==requestId)return;
+    cursor=before;nextCursor=result.next_before??null;
+    pageInfo.textContent=" Seite "+(history.length+1)+" ";
+    prev.disabled=!history.length;next.disabled=nextCursor===null;
     selected.clear();list.replaceChildren();
     try {
       const usage=await api("/api/knowledge/usage",{});
@@ -878,6 +888,7 @@ async function openKnowledge() {
         categoryInfo.append(button(name+" ("+count+")",()=>{query.value="";categoryFilter=name;category.value=name;return load();}));
       }
     } catch(e){usageInfo.textContent="Speicherstatistik nicht verfügbar";}
+    if(id!==requestId)return;
     for(const entry of result.entries){
       const row=make("section");row.className="tile";
       const check=make("input");check.type="checkbox";check.onchange=()=>check.checked?selected.add(entry.id):selected.delete(entry.id);
@@ -930,6 +941,6 @@ async function openKnowledge() {
     button("Neuer Eintrag",()=>{editing=null;content.value="";}),
     button("Auswahl löschen",()=>remove({ids:[...selected]})),
     button("Kategorie löschen",()=>remove({category:category.value})),
-    button("Alles löschen",()=>remove({all:true})),button("Schließen",()=>d.close()),list);
+    button("Alles löschen",()=>remove({all:true})),button("Schließen",()=>d.close()),prev,pageInfo,next,list);
   d.addEventListener("close",()=>d.remove(),{once:true});document.body.append(d);d.showModal();await load();
 }
