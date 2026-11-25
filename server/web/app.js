@@ -897,6 +897,22 @@ async function openKnowledge() {
       alert(result.imported+" Wissenseinträge importiert.");await load();
     }catch(e){showErr(e);}finally{file.value="";}
   };
+  const backupSelect=make("select");
+  const backupInfo=make("p");
+  async function refreshBackups(){
+    const result=await api("/api/knowledge/backups",{});
+    backupSelect.replaceChildren(new Option("Sicherung auswählen",""));
+    for(const name of result.backups)backupSelect.add(new Option(name,name));
+    backupInfo.textContent="Sicherungsort: "+result.folder;
+  }
+  d.append(make("h3","Datensicherung"),backupInfo,backupSelect,
+    button("Sicherungen anzeigen",refreshBackups),
+    button("Wiederherstellen",async()=>{
+      if(!backupSelect.value)throw new Error("Bitte eine Sicherung auswählen.");
+      if(!confirm("Wissen aus dieser Sicherung ergänzen? Bestehende Einträge bleiben erhalten."))return;
+      const result=await api("/api/knowledge/restore",{name:backupSelect.value,confirmed:true});
+      alert(result.restored+" Wissenseinträge wiederhergestellt.");await load();
+    }));
   d.append(file,button("JSON exportieren",()=>exportKnowledge()),button("Markdown exportieren",()=>exportKnowledge(true)),button("JSON importieren",()=>file.click()));
   d.append(make("h2","Wissensbibliothek"),query,button("Suchen",load),category,content,
     button("Speichern",async()=>{await api(editing===null?"/api/knowledge/add":"/api/knowledge/edit",{id:editing,category:category.value,content:content.value});editing=null;content.value="";await load();}),
