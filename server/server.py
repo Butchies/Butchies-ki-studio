@@ -1790,7 +1790,7 @@ class Handler(BaseHTTPRequestHandler):
                 # Separate systemd unit survives shutdown of the web service.
                 command = ["systemd-run", "--unit=" + unit, "--collect",
                            "/bin/sh", "-c",
-                           'systemctl stop butchies-ki.service || exit 1; "$1" "$2" --migrate-storage "$3"; rc=$?; systemctl start butchies-ki.service; sleep 5; if ! systemctl is-active --quiet butchies-ki.service; then systemctl stop butchies-ki.service; if [ "$rc" -eq 0 ]; then "$1" "$2" --rollback-storage "$3" || exit 1; fi; systemctl start butchies-ki.service || exit 1; exit 1; fi; exit "$rc"',
+                           'systemctl stop butchies-ki.service || exit 1; "$1" "$2" --migrate-storage "$3"; rc=$?; systemctl start butchies-ki.service; if ! "$1" "$2" --check-storage-start "$3"; then systemctl stop butchies-ki.service; if [ "$rc" -eq 0 ]; then "$1" "$2" --rollback-storage "$3" || exit 1; fi; systemctl start butchies-ki.service || exit 1; exit 1; fi; exit "$rc"',
                            "migration", sys.executable, script, uid]
                 subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=15)
                 return self.send_json({"ok": True, "message": "Verlagerung beauftragt; Server wird neu gestartet"})
@@ -2158,6 +2158,17 @@ def offline_storage_migration(uid):
 if __name__ == "__main__":
     if len(sys.argv) == 3 and sys.argv[1] == "--migrate-storage":
         offline_storage_migration(sys.argv[2])
+    elif len(sys.argv) == 3 and sys.argv[1] == "--check-storage-start":
+        for attempt in range(30):
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:%d/api/ping" % PORT, timeout=2) as response:
+                    info = json.load(response)
+                if info.get("ok") and info.get("name") == "Butchies KI Studio" and info.get("version") == VERSION:
+                    sys.exit(0)
+            except (OSError, ValueError):
+                pass
+            time.sleep(2)
+        sys.exit(1)
     elif len(sys.argv) == 3 and sys.argv[1] == "--rollback-storage":
         if DRYRUN or os.geteuid() != 0:
             sys.exit("Wiederherstellung nicht erlaubt")
