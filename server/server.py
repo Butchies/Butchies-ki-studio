@@ -1518,7 +1518,7 @@ class Handler(BaseHTTPRequestHandler):
             })
         if path == "/api/storage":
             try:
-                return self.send_json({"ok": True, "limit_percent": 90, "devices": storage_inventory()})
+                return self.send_json({"ok": True, "limit_percent": 90, "devices": storage_inventory(), "approved": CONFIG.get("approved_storage", {})})
             except (OSError, subprocess.SubprocessError, ValueError) as exc:
                 return self.error("Datenträgerabfrage fehlgeschlagen: " + str(exc), 503)
         if path == "/api/models":
@@ -1613,6 +1613,32 @@ class Handler(BaseHTTPRequestHandler):
             return self.error("Bitte anmelden", 401)
         ACTIVITY.touch()
 
+        if path == "/api/storage/approve":
+            if data.get("confirmed") is not True:
+                return self.error("Ausdrückliche Bestätigung erforderlich")
+            uid = str(data.get("uuid", ""))
+            try:
+                matches = [d for d in storage_inventory() if d.get("uuid") == uid and uid
+                           and d.get("mountpoint") and d["mountpoint"] != "/"
+                           and not d.get("ro") and d.get("available", 0) > 0]
+            except (OSError, subprocess.SubprocessError, ValueError):
+                return self.error("Datenträgerabfrage fehlgeschlagen", 503)
+            if len(matches) != 1:
+                return self.error("Datenträger nicht eindeutig verfügbar")
+            disk = matches[0]
+            approved = dict(CONFIG.get("approved_storage") or {})
+            approved[uid] = {"mountpoint": disk["mountpoint"], "path": disk["path"]}
+            CONFIG["approved_storage"] = approved
+            save_config(CONFIG)
+            return self.send_json({"ok": True})
+        if path == "/api/storage/revoke":
+            if data.get("confirmed") is not True:
+                return self.error("Ausdrückliche Bestätigung erforderlich")
+            approved = dict(CONFIG.get("approved_storage") or {})
+            approved.pop(str(data.get("uuid", "")), None)
+            CONFIG["approved_storage"] = approved
+            save_config(CONFIG)
+            return self.send_json({"ok": True})
         if path == "/api/logout":
             SESSIONS.pop(tok, None)
             return self.send_json({"ok": True})
