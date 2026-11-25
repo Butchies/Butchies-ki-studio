@@ -79,11 +79,14 @@ EOF
 
 # Startreihenfolge: SSD (ubuntu) zuerst, damit der Stick stecken bleiben darf
 status 94 "Stelle Startreihenfolge auf die SSD …"
-ID=$(efibootmgr 2>/dev/null | grep -i ubuntu | head -1 | sed -E 's/^Boot([0-9A-Fa-f]{4}).*/\1/')
+ID=$(efibootmgr 2>/dev/null | sed -nE 's/^Boot([0-9A-Fa-f]{4})\*?[[:space:]]+ubuntu([[:space:]].*)?$/\1/ip' | sed -n '1p' || true)
 if [ -n "$ID" ]; then
-  REST=$(efibootmgr | sed -nE 's/^BootOrder: //p' | tr ',' '\n' | grep -vi "^$ID$" | paste -sd, -)
-  efibootmgr -o "$ID${REST:+,$REST}" || true
-  echo "BootOrder gesetzt: $ID zuerst"
+  REST=$(efibootmgr | sed -nE 's/^BootOrder: //p' | tr ',' '\n' | grep -vi "^$ID$" | paste -sd, - || true)
+  if efibootmgr -o "$ID${REST:+,$REST}"; then
+    echo "BootOrder gesetzt: $ID zuerst"
+  else
+    echo "BootOrder konnte nicht geändert werden – Stick bitte abziehen"
+  fi
 else
   echo "Kein ubuntu-Starteintrag gefunden – Stick nach der Installation bitte abziehen"
 fi
@@ -102,6 +105,6 @@ else
   echo "Stick ist schreibgeschützt eingehängt – Protokoll bleibt nur im Speicher"
 fi
 
-status 99 "Fertig! Der Mini-PC startet neu. Danach: http://$BKI_HOSTNAME – dort lädt er die KI (ca. 17 GB)." fertig
+status 99 "Linux installiert. Der Mini-PC startet neu. Danach: http://$BKI_HOSTNAME – dort erfolgt die KI-Ersteinrichtung." fertig
 echo "late.sh fertig"
 exit 0
