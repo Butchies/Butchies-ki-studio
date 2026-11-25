@@ -40,7 +40,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.15"
+VERSION = "0.4.16"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -647,7 +647,28 @@ def llama_release_asset(backend):
     raise RuntimeError("Kein llama.cpp-Paket für %s in den offiziellen Builds gefunden" % platform)
 
 
+def missing_llama_dependencies():
+    if DRYRUN:
+        return []
+    code, status = run(["dpkg-query", "--show", "--showformat=${Status}", "libgomp1"], timeout=10)
+    return [] if code == 0 and status.strip() == "install ok installed" else ["libgomp1"]
+
+
+def ensure_llama_dependencies(progress=0):
+    missing = missing_llama_dependencies()
+    if missing:
+        apt_install(missing, progress, progress)
+        if missing_llama_dependencies():
+            raise RuntimeError("Laufzeitbibliothek libgomp1 konnte nicht eingerichtet werden")
+
+
+def start_existing_llama():
+    ensure_llama_dependencies()
+    LLAMA.start()
+
+
 def install_llama(p_from=0, p_to=100):
+    ensure_llama_dependencies(p_from)
     backend = CONFIG.get("backend", "vulkan")
     JOB.progress(p_from, "Suche neueste KI-Laufzeit (llama.cpp, %s) …" % backend)
     tag, asset = llama_release_asset(backend)
@@ -798,6 +819,8 @@ def first_setup(model_id=None):
     """Ersteinrichtung: Laufzeit, gewählte Modelle (fehlende laden) und Erweiterungen."""
     if not llama_binary():
         install_llama(0, 8)
+    else:
+        ensure_llama_dependencies()
     models, custom, exts = wanted_setup()
     if model_id:
         models, custom = [model_id], []
@@ -2089,8 +2112,9 @@ def setup_with_retry():
             time.sleep(5)
         if not JOB.error:
             return
-        log("Ersteinrichtung: neuer Versuch in 60 Sekunden (%d/30)" % attempt)
-        time.sleep(60)
+        delay = 900 if "rate limit" in str(JOB.error).lower() else 60
+        log("Ersteinrichtung: neuer Versuch in %d Sekunden (%d/30)" % (delay, attempt))
+        time.sleep(delay)
 
 
 def main():
@@ -2109,7 +2133,10 @@ def main():
         if not CONFIG.get("active_model"):
             CONFIG["active_model"] = installed_models()[0]["file"]
             save_config(CONFIG)
-        LLAMA.start()
+        if missing_llama_dependencies() and os.environ.get("BKI_NOSETUP") != "1":
+            JOB.start("KI-Laufzeit vorbereiten", start_existing_llama)
+        else:
+            LLAMA.start()
     elif os.environ.get("BKI_NOSETUP") != "1":
         threading.Thread(target=setup_with_retry, daemon=True).start()
     srv = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
