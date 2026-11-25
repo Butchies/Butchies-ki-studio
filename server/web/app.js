@@ -170,6 +170,31 @@ function renderStatus(s) {
 
 async function pollStatus() {
   try { renderStatus(await api("/api/status")); } catch (e) { /* offline / schläft */ }
+  const host = document.querySelector(".statuspanel");
+  if (!host) return;
+  let panel = $("team-live-status");
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.id = "team-live-status";
+    panel.className = "tile";
+    panel.setAttribute("aria-live", "polite");
+    host.append(panel);
+  }
+  try {
+    const {status: t} = await api("/api/team/status");
+    const roles = {programming:"Programmier-KI", review:"Prüf-KI", analysis:"Analyse-KI"};
+    const phases = {idle:"Bereit", planning:"Haupt-KI plant", specialist:(roles[t.role] || t.role) + " arbeitet", synthesis:"Haupt-KI führt Ergebnisse zusammen"};
+    const heading = document.createElement("strong");
+    heading.textContent = "KI-Team";
+    const line = document.createElement("p");
+    line.textContent = phases[t.phase] || "Unbekannter Status";
+    const model = document.createElement("span");
+    model.className = "muted small";
+    model.textContent = t.phase === "specialist" ? t.model : "";
+    panel.replaceChildren(heading,line,model);
+  } catch(e) {
+    panel.textContent = "KI-Team: Status nicht verfügbar";
+  }
 }
 
 // ---------------------------------------------------------------- Markdown (klein)
