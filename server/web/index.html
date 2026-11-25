@@ -14,14 +14,23 @@
     <div class="brand big"><span class="logo" aria-hidden="true"></span>Butchies KI Studio <span class="accent">Offline</span></div>
     <h1 id="gate-title">Anmelden</h1>
     <p id="gate-text" class="muted">Gib dein Passwort für die Oberfläche ein.</p>
-    <label for="gate-pw">Passwort</label>
-    <input id="gate-pw" type="password" autocomplete="current-password" required minlength="8">
+    <div id="gate-recovery" hidden>
+      <p>Erzeuge am Linux-Server einen Einmalcode.</p>
+      <code>sudo python3 /opt/butchies-ki/server.py --recovery-code</code>
+      <label for="gate-code">Einmalcode</label>
+      <input id="gate-code" autocomplete="off" spellcheck="false">
+      <label for="gate-pin">Rücksetz-PIN (0000)</label>
+      <input id="gate-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••">
+    </div>
+    <label for="gate-pw" id="gate-pw-label">Passwort</label>
+    <input id="gate-pw" type="password" autocomplete="current-password" required minlength="4" placeholder="••••">
     <div id="gate-pw2-wrap" hidden>
       <label for="gate-pw2">Passwort wiederholen</label>
-      <input id="gate-pw2" type="password" autocomplete="new-password" minlength="8">
+      <input id="gate-pw2" type="password" autocomplete="new-password" minlength="4">
     </div>
     <p id="gate-error" class="error" role="alert"></p>
     <button class="btn primary" type="submit" id="gate-btn">Anmelden</button>
+    <button type="button" id="gate-switch">Passwort zurücksetzen</button>
   </form>
 </div>
 
@@ -33,6 +42,7 @@
       <button class="btn ghost small" id="logout-btn" type="button">Abmelden</button>
     </div>
   </header>
+  <p id="gate-success" role="status" hidden></p>
 
   <div id="job-banner" class="job-banner" hidden>
     <div class="job-head"><strong id="job-name"></strong><span id="job-percent" class="job-percent"></span></div>
@@ -190,8 +200,8 @@
       <form id="pw-form" class="card form">
         <h2>Passwort ändern</h2>
         <label for="pw-old">Altes Passwort</label><input id="pw-old" type="password" autocomplete="current-password">
-        <label for="pw-new">Neues Passwort (mind. 8 Zeichen)</label><input id="pw-new" type="password" autocomplete="new-password">
-        <label class="check"><input type="checkbox" id="pw-linux" checked> Auch für Linux/SSH übernehmen</label>
+        <label for="pw-new">Neues Studio-Passwort (mind. 4 Zeichen)</label><input id="pw-new" type="password" autocomplete="new-password">
+        <label class="check"><input type="checkbox" id="pw-linux"> Auch für Linux/SSH übernehmen</label>
         <p id="pw-msg" class="muted" role="status"></p>
         <button class="btn primary" type="submit">Ändern</button>
       </form>

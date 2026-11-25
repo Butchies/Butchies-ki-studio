@@ -2,7 +2,7 @@ name: Setup.exe bauen
 
 on:
   push:
-    branches: [main]
+    branches: [main, fix/0.4.8-studio-login]
   workflow_dispatch:
 
 permissions:

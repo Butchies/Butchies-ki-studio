@@ -15,7 +15,7 @@ async function api(path, body) {
   let data = {};
   try { data = await r.json(); } catch (e) { /* leer */ }
   if (r.status === 401 && !path.startsWith("/api/login") && !path.startsWith("/api/setup")) {
-    showGate(false);
+    showGate("login");
   }
   if (!r.ok || data.ok === false) throw new Error(data.error || ("Fehler " + r.status));
   return data;
@@ -39,40 +39,67 @@ function saveChats() {
 }
 
 // ---------------------------------------------------------------- Anmeldung
-let gateSetup = false;
-function showGate(setup) {
-  gateSetup = setup;
+let gateMode = "login";
+function showGate(mode) {
+  gateMode = mode;
+  const setup = mode === "setup";
+  const reset = mode === "reset";
   $("app").hidden = true;
+  $("gate-success").hidden = true;
   $("gate").hidden = false;
-  $("gate-title").textContent = setup ? "Willkommen!" : "Anmelden";
-  $("gate-text").textContent = setup
-    ? "Lege ein Passwort für die Oberfläche fest (mindestens 8 Zeichen). Damit kann niemand sonst im Heimnetz deinen Mini-PC steuern."
-    : "Gib dein Passwort für die Oberfläche ein.";
-  $("gate-pw2-wrap").hidden = !setup;
-  $("gate-pw").autocomplete = setup ? "new-password" : "current-password";
-  $("gate-btn").textContent = setup ? "Passwort festlegen" : "Anmelden";
-  $("gate-pw").focus();
+  $("gate-form").reset();
+  $("gate-error").textContent = "";
+  $("gate-title").textContent = reset ? "Passwort zurücksetzen" : setup ? "Ersteinrichtung" : "Anmelden";
+  $("gate-text").textContent = reset
+    ? "Gib den Einmalcode, die Rücksetz-PIN und dein neues Passwort ein."
+    : setup ? "Lege dein Studio-Passwort fest. Mindestens 4 Zeichen." : "Gib dein Passwort für die Oberfläche ein.";
+  $("gate-recovery").hidden = !reset;
+  $("gate-code").required = reset;
+  $("gate-pin").required = reset;
+  $("gate-pw2-wrap").hidden = mode === "login";
+  $("gate-pw2").required = mode !== "login";
+  $("gate-pw").autocomplete = mode === "login" ? "current-password" : "new-password";
+  $("gate-pw-label").textContent = mode === "login" ? "Passwort" : "Neues Passwort";
+  $("gate-btn").textContent = mode === "login" ? "Anmelden" : "Passwort festlegen";
+  $("gate-switch").hidden = setup;
+  $("gate-switch").textContent = reset ? "Zurück zur Anmeldung" : "Passwort zurücksetzen";
+  $(reset ? "gate-code" : "gate-pw").focus();
 }
 
+$("gate-switch").addEventListener("click", () => showGate(gateMode === "reset" ? "login" : "reset"));
 $("gate-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const mode = gateMode;
+  const submit = $("gate-btn");
+  submit.disabled = true;
+  $("gate-switch").disabled = true;
   $("gate-error").textContent = "";
   const pw = $("gate-pw").value;
   try {
-    if (gateSetup) {
-      if (pw !== $("gate-pw2").value) throw new Error("Die Passwörter sind nicht gleich.");
-      await api("/api/setup", { password: pw });
-    } else {
-      await api("/api/login", { password: pw });
-    }
-    $("gate-pw").value = ""; $("gate-pw2").value = "";
+    if (mode !== "login" && pw !== $("gate-pw2").value) throw new Error("Die Passwörter sind nicht gleich.");
+    if (mode === "setup") await api("/api/setup", { password: pw });
+    else if (mode === "reset") await api("/api/login/reset", {
+      password: pw, pin: $("gate-pin").value, code: $("gate-code").value.trim(),
+    });
+    else await api("/api/login", { password: pw });
+    const status = await api("/api/state");
+    if (!status.logged_in) throw new Error("Die Sitzung konnte nicht geöffnet werden.");
+    $("gate-form").reset();
     startApp();
-  } catch (err) { $("gate-error").textContent = err.message; }
+    $("gate-success").textContent = mode === "setup" ? "Studio eingerichtet und erfolgreich angemeldet."
+      : mode === "reset" ? "Passwort geändert und erfolgreich angemeldet." : "Erfolgreich angemeldet.";
+    $("gate-success").hidden = false;
+  } catch (err) {
+    $("gate-error").textContent = err.message;
+  } finally {
+    submit.disabled = false;
+    $("gate-switch").disabled = false;
+  }
 });
 
 $("logout-btn").addEventListener("click", async () => {
   await api("/api/logout", {}).catch(() => {});
-  showGate(false);
+  showGate("login");
 });
 
 // ---------------------------------------------------------------- Navigation
@@ -646,8 +673,8 @@ function startApp() {
 (async function init() {
   try {
     const s = await api("/api/state");
-    if (s.needs_password) showGate(true);
-    else if (!s.logged_in) showGate(false);
+    if (s.needs_password) showGate("setup");
+    else if (!s.logged_in) showGate("login");
     else startApp();
   } catch (e) {
     document.body.textContent = "Butchies KI Studio ist gerade nicht erreichbar: " + e.message;

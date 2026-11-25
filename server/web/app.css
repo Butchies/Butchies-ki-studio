@@ -165,3 +165,25 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .inline-form input{flex:1;min-width:240px}
 .rec{color:var(--danger)!important;border-color:var(--danger)!important}
 .job-banner .btn{align-self:flex-start}
+
+.gate {
+  color-scheme: light;
+  --bg: #f7fbff;
+  --panel: #fff;
+  --line: #cbdff2;
+  --line2: #9ab3cc;
+  --text: #14253d;
+  --muted: #455a72;
+  --soft: #243951;
+  --accent: #0067c0;
+  --on-accent: #fff;
+  --danger: #a52222;
+  --hover: #eaf4ff;
+  background: #eaf4ff;
+  color: var(--text);
+}
+.gate .brand { flex-wrap: wrap; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+#gate-pw2-wrap, #gate-recovery { display: flex; flex-direction: column; gap: 8px; }
+#gate-recovery code { overflow-wrap: anywhere; }
+#gate-switch { align-self: center; border: 0; background: transparent; color: var(--accent); padding: 8px; cursor: pointer; text-decoration: underline; }
+#gate-success { margin: 0; padding: 7px 18px; background: var(--accent-dark); color: var(--text); }

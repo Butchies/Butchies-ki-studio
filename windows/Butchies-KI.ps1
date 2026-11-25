@@ -8,7 +8,7 @@
   * Weckseite http://localhost:8765 (Desktop-Verknüpfung "Butchies KI")
   * Das Abfragen des Status hält den Mini-PC NICHT wach.
 #>
-param([string]$MiniPC = "")
+param([string]$MiniPC = "", [switch]$OpenOnStart)
 
 $ErrorActionPreference = "Continue"
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing, PresentationFramework, PresentationCore, WindowsBase, WindowsFormsIntegration
@@ -23,7 +23,11 @@ $cfg = @{ host = "butchies-ki"; mac = ""; ip = "" }
 foreach ($f in @($cfgFile, (Join-Path $cfgDir "weck-helfer.json"))) {
   if (Test-Path $f) { try { $j = Get-Content $f -Raw | ConvertFrom-Json; foreach ($k in "host", "mac", "ip") { if ($j.$k) { $cfg[$k] = $j.$k } }; break } catch {} }
 }
-if ($MiniPC) { $cfg.host = $MiniPC }
+if ($MiniPC -and $MiniPC -ne $cfg.host) {
+  $cfg.host = $MiniPC; $cfg.ip = ""; $cfg.mac = ""
+  if (Test-Path $pwFile) { Remove-Item $pwFile -Force }
+}
+function ServerName($name) { if ($name.Contains(".")) { $name } else { "$name.local" } }
 function Speichern { $cfg | ConvertTo-Json | Set-Content -Path $cfgFile -Encoding UTF8 }
 function LadePasswort {
   if (-not (Test-Path $pwFile)) { return "" }
@@ -39,7 +43,7 @@ function SpeicherePasswort($pw) {
 
 # --- Gemeinsamer Zustand mit dem Hintergrund-Thread -----------------------------
 $sync = [hashtable]::Synchronized(@{
-  Host = $cfg.host; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
+  Host = (ServerName $cfg.host); Base = ""; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
   State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
@@ -49,13 +53,15 @@ $sync = [hashtable]::Synchronized(@{
 $worker = {
   param($sync)
   $cookies = New-Object Net.CookieContainer
-  function Basis { if ($sync.Ip) { "http://$($sync.Ip)" } else { "http://$($sync.Host).local" } }
+
   function Anfrage($method, $path, $body, $ms) {
     $result = @{ Code = 0; Text = "" }
-    foreach ($base in @((Basis), "http://$($sync.Host).local") | Select-Object -Unique) {
+    $bases = @("http://$($sync.Host)")
+    if ($sync.Ip) { $bases += "http://$($sync.Ip)" }
+    foreach ($base in ($bases | Select-Object -Unique)) {
       try {
         $req = [Net.HttpWebRequest]::Create("$base$path")
-        $req.Method = $method; $req.Timeout = $ms; $req.ReadWriteTimeout = $ms
+        $req.AllowAutoRedirect = $false; $req.Method = $method; $req.Timeout = $ms; $req.ReadWriteTimeout = $ms
         $req.CookieContainer = $cookies; $req.UserAgent = "ButchiesKI-Taskleiste"
         if ($body -ne $null) {
           $bytes = [Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Compress))
@@ -64,10 +70,15 @@ $worker = {
         }
         $resp = $req.GetResponse()
         $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
-        $result.Text = $sr.ReadToEnd(); $result.Code = [int]$resp.StatusCode; $resp.Close()
+        $result.Text = $sr.ReadToEnd(); $result.Code = [int]$resp.StatusCode; $sync.Base = $base; $resp.Close()
         return $result
       } catch [Net.WebException] {
-        if ($_.Exception.Response) { $result.Code = [int]$_.Exception.Response.StatusCode; return $result }
+        if ($_.Exception.Response) {
+          $response = $_.Exception.Response
+          $result.Code = [int]$response.StatusCode
+          $response.Close()
+          if ($result.Code -eq 401) { $sync.Base = $base; return $result }
+        }
       } catch {}
     }
     return $result
@@ -84,7 +95,7 @@ $worker = {
   function Anmelden {
     if (-not $sync.Password) { $sync.State = "anmelden"; return $false }
     $r = Anfrage "POST" "/api/login" @{ password = $sync.Password } 5000
-    if ($r.Code -eq 200) { $sync.LoginError = ""; return $true }
+    if ($r.Code -eq 200) { $sync.LoginError = ""; $sync.AcceptedPassword = $sync.Password; return $true }
     if ($r.Code -eq 401) { $sync.LoginError = "Passwort falsch"; $sync.Password = ""; $sync.State = "anmelden" }
     return $false
   }
@@ -334,7 +345,7 @@ function OeffneOberflaeche {
   $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   if ($edge) {
     $prof = Join-Path $cfgDir "edge-profil"
-    $origins = "http://$($sync.Host).local" + $(if ($sync.Ip) { ",http://$($sync.Ip)" } else { "" })
+    $origins = "http://$($sync.Host)" + $(if ($sync.Ip) { ",http://$($sync.Ip)" } else { "" })
     Start-Process $edge -ArgumentList "--app=$url", "--user-data-dir=`"$prof`"", "--window-size=1400,900", "--unsafely-treat-insecure-origin-as-secure=$origins"
   } else { Start-Process $url }
 }
@@ -366,19 +377,19 @@ function ZeigeFenster {
   })
   $n.BtnLogin.Add_Click({
     $pw = $script:win.Tag.N.Pw.Password
-    if ($pw.Length -lt 8) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 8 Zeichen."; return }
-    $sync.Password = $pw; SpeicherePasswort $pw; $sync.State = "unbekannt"; $sync.Queue.Enqueue("login")
+    if ($pw.Length -lt 4) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 4 Zeichen."; return }
+    $sync.Password = $pw; $sync.Queue.Enqueue("login"); $script:win.Tag.N.Pw.Clear()
     $script:win.Tag.N.LoginMsg.Text = "Melde an …"
   })
   $n.LinkSettings.Add_Click({
     $p = $script:win.Tag.N.SettingsPanel
     $p.Visibility = if ($p.Visibility -eq "Visible") { "Collapsed" } else { "Visible" }
-    $script:win.Tag.N.HostBox.Text = $sync.Host
+    $script:win.Tag.N.HostBox.Text = $cfg.host
     $script:win.Tag.N.AutoStart.IsChecked = Test-Path $startupLnk
   })
   $n.BtnSave.Add_Click({
     $h = $script:win.Tag.N.HostBox.Text.Trim().ToLower()
-    if ($h -match '^[a-z0-9-]{1,30}$' -and $h -ne $sync.Host) { $sync.Host = $h; $sync.Ip = ""; $cfg.host = $h; $cfg.ip = ""; Speichern }
+    if ($h -match '^[a-z0-9-]{1,30}$' -and $h -ne $cfg.host) { SpeicherePasswort ""; $sync.Password = ""; $sync.AcceptedPassword = ""; $sync.Base = ""; $sync.Host = ServerName $h; $sync.Ip = ""; $sync.Mac = ""; $cfg.host = $h; $cfg.ip = ""; $cfg.mac = ""; Speichern }
     AutostartSetzen ([bool]$script:win.Tag.N.AutoStart.IsChecked)
     $script:win.Tag.N.SettingsPanel.Visibility = "Collapsed"
   })
@@ -446,7 +457,7 @@ function FensterAktualisieren {
       $n.Info.Text = "Schläft in ca. $rest Minute$(if ($rest -ne 1) { 'n' }), wenn du ihn nicht benutzt."
     } else { $n.Info.Text = "Ruhezustand ist ausgeschaltet." }
   } else {
-    $n.Sub.Text = "$($sync.Host).local"
+    $n.Sub.Text = "$($sync.Host)"
     $n.Info.Text = switch ($state) {
       "schlaeft" { if ($sync.LastSeen) { "Zuletzt wach: $($sync.LastSeen.ToString('HH:mm')) Uhr. »Aufwecken« oder »Oberfläche öffnen« weckt ihn." } else { "Nicht erreichbar – schläft er, oder ist er aus?" } }
       "anmelden" { "Einmal anmelden, dann zeigt das Fenster alle Werte." }
@@ -507,8 +518,9 @@ function Antwort($ctx, $text, $type) {
   $ctx.Response.OutputStream.Write($b, 0, $b.Length); $ctx.Response.Close()
 }
 function Bearbeite($ctx) {
-  $wach = $sync.State -in @("wach", "arbeitet", "problem", "anmelden")
-  $ui = "http://$($sync.Host).local/"
+  $base = $sync.Base
+  $wach = $base -and ($sync.State -in @("wach", "arbeitet", "problem", "anmelden"))
+  $ui = "$base/"
   switch ($ctx.Request.Url.AbsolutePath) {
     "/wake" { $sync.Queue.Enqueue("wake"); $sync.Fast = $true; Antwort $ctx '{"ok":true}' "application/json" }
     "/status" { Antwort $ctx (@{ awake = $wach; url = $ui; mac = $sync.Mac } | ConvertTo-Json -Compress) "application/json" }
@@ -542,13 +554,14 @@ $timer.add_Tick({
     AktualisiereSymbol
     FensterAktualisieren
     if ($sync.Mac -and ($sync.Mac -ne $cfg.mac -or $sync.Ip -ne $cfg.ip)) { $cfg.mac = $sync.Mac; $cfg.ip = $sync.Ip; Speichern }
+    if ($sync.AcceptedPassword) { SpeicherePasswort $sync.AcceptedPassword; $sync.AcceptedPassword = "" }
     if ($sync.Notify) { $tray.ShowBalloonTip(5000, "Butchies KI", $sync.Notify, "Info"); $sync.Notify = "" }
     if ($sync.Message -and -not $script:win) { $sync.Message = "" }
   }
 })
 $timer.Start()
 AktualisiereSymbol
-if (-not $sync.Password) { $sync.State = "anmelden"; $sync.Version++ }
+if ($OpenOnStart) { OeffneOberflaeche }
 
 [Windows.Forms.Application]::Run()
 $sync.Stop = $true

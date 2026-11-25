@@ -29,6 +29,7 @@ import secrets
 import shutil
 import socket
 import subprocess
+import sys
 import tarfile
 import threading
 import time
@@ -38,7 +39,7 @@ import zipfile
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.7"
+VERSION = "0.4.8"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -158,6 +159,36 @@ def save_config(cfg):
 
 
 CONFIG = load_config()
+_password_lock = threading.Lock()
+RECOVERY_PATH = os.path.join(ETC_DIR, "studio-recovery")
+
+
+def create_recovery_code():
+    if os.geteuid() != 0:
+        raise SystemExit("Bitte mit sudo ausführen.")
+    os.makedirs(ETC_DIR, exist_ok=True)
+    code = secrets.token_urlsafe(24)
+    tmp = RECOVERY_PATH + "." + secrets.token_hex(8)
+    with os.fdopen(os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w") as f:
+        json.dump({"hash": hashlib.sha256(code.encode()).hexdigest(),
+                   "expires": time.time() + 600}, f)
+    os.replace(tmp, RECOVERY_PATH)
+    print("Einmalcode (10 Minuten gültig): " + code)
+
+
+def password_error(password):
+    if len(password) < 4:
+        return "Das Passwort braucht mindestens 4 Zeichen"
+    if password == "0000":
+        return "0000 ist für die Wiederherstellung reserviert"
+    return ""
+
+
+def set_ui_password(password):
+    updated = dict(CONFIG, ui_password=hash_password(password))
+    save_config(updated)
+    CONFIG["ui_password"] = updated["ui_password"]
+
 
 
 def hash_password(password, salt=None):
@@ -1534,21 +1565,42 @@ class Handler(BaseHTTPRequestHandler):
         data = self.body()
 
         if path == "/api/setup":
-            if CONFIG.get("ui_password"):
-                return self.error("Passwort ist schon gesetzt", 403)
             pw = str(data.get("password", ""))
-            if len(pw) < 8:
-                return self.error("Das Passwort braucht mindestens 8 Zeichen")
-            CONFIG["ui_password"] = hash_password(pw)
-            save_config(CONFIG)
+            if error := password_error(pw):
+                return self.error(error)
+            with _password_lock:
+                if CONFIG.get("ui_password"):
+                    return self.error("Passwort ist schon gesetzt", 403)
+                set_ui_password(pw)
             log("Passwort für die Oberfläche festgelegt")
             return self.send_json({"ok": True}, extra_headers=self.new_session_header())
+        if path == "/api/login/reset":
+            pw = str(data.get("password", ""))
+            if error := password_error(pw):
+                return self.error(error)
+            digest = hashlib.sha256(str(data.get("code", "")).encode()).hexdigest()
+            with _password_lock:
+                try:
+                    with open(RECOVERY_PATH, encoding="utf-8") as f:
+                        recovery = json.load(f)
+                except (OSError, ValueError):
+                    recovery = {}
+                if (data.get("pin") != "0000" or time.time() >= recovery.get("expires", 0)
+                        or not hmac.compare_digest(digest, recovery.get("hash", ""))):
+                    return self.error("Einmalcode oder Rücksetz-PIN ungültig", 403)
+                os.unlink(RECOVERY_PATH)
+                set_ui_password(pw)
+                SESSIONS.clear()
+                headers = self.new_session_header()
+            return self.send_json({"ok": True}, extra_headers=headers)
         if path == "/api/login":
             time.sleep(0.5)  # bremst Raten
-            if check_password(str(data.get("password", ""))):
-                ACTIVITY.touch()
-                return self.send_json({"ok": True}, extra_headers=self.new_session_header())
-            return self.error("Falsches Passwort", 401)
+            with _password_lock:
+                if not check_password(str(data.get("password", ""))):
+                    return self.error("Falsches Passwort", 401)
+                headers = self.new_session_header()
+            ACTIVITY.touch()
+            return self.send_json({"ok": True}, extra_headers=headers)
 
         tok = self.session()
         if not tok:
@@ -1625,12 +1677,14 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"ok": True})
         if path == "/api/password":
             new = str(data.get("new", ""))
-            if not check_password(str(data.get("old", ""))):
-                return self.error("Altes Passwort stimmt nicht", 403)
-            if len(new) < 8:
-                return self.error("Das neue Passwort braucht mindestens 8 Zeichen")
-            CONFIG["ui_password"] = hash_password(new)
-            save_config(CONFIG)
+            if error := password_error(new):
+                return self.error(error)
+            if data.get("linux") and (len(new) < 8 or "\n" in new or "\r" in new):
+                return self.error("Das Linux-Passwort braucht mindestens 8 Zeichen und darf keinen Zeilenumbruch enthalten")
+            with _password_lock:
+                if not check_password(str(data.get("old", ""))):
+                    return self.error("Altes Passwort stimmt nicht", 403)
+                set_ui_password(new)
             if data.get("linux"):
                 user = CONFIG.get("username", "butchies")
                 if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,31}", user):
@@ -1851,4 +1905,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    if sys.argv[1:] == ["--recovery-code"]:
+        create_recovery_code()
+    elif len(sys.argv) == 1:
+        main()
+    else:
+        raise SystemExit("Verwendung: server.py [--recovery-code]")
