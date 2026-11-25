@@ -562,6 +562,43 @@ def storage_verified_copy(uid):
             copied += 1
             JOB.progress(100 * copied / max(1, plan["files"]), "Datei geprüft: " + name)
     log("Verifizierte Dateikopie erstellt; Quelle unverändert: " + target)
+    return plan
+
+
+def storage_activate_verified(plan):
+    """Only call from an offline migration worker after all writers stop."""
+    uid = plan["uuid"]
+    if uid not in (CONFIG.get("approved_storage") or {}):
+        raise RuntimeError("Speicherfreigabe wurde widerrufen")
+    mount = os.path.dirname(plan["target"])
+    if not os.path.ismount(mount):
+        raise RuntimeError("Zieldatenträger fehlt")
+    actual = subprocess.check_output(["findmnt", "-n", "-o", "UUID", "--mountpoint", mount],
+                                     text=True, timeout=8).strip()
+    if actual != uid:
+        raise RuntimeError("Zieldatenträger wurde gewechselt")
+    source, target = plan["source"], plan["target"]
+    def manifest(base):
+        result = {}
+        for root, dirs, files in os.walk(base, followlinks=False):
+            for name in dirs + files:
+                if os.path.islink(os.path.join(root, name)):
+                    raise RuntimeError("Symbolische Verknüpfung entdeckt")
+            for name in files:
+                p = os.path.join(root, name)
+                if not os.path.isfile(p):
+                    raise RuntimeError("Nicht reguläre Datei")
+                result[os.path.relpath(p, base)] = storage_file_digest(p)
+        return result
+    if manifest(source) != manifest(target):
+        raise RuntimeError("Datenbestand wurde verändert; Umschaltung abgebrochen")
+    updated = dict(CONFIG)
+    updated["previous_storage"] = CONFIG.get("active_storage")
+    updated["active_storage"] = {"uuid": uid, "mountpoint": mount}
+    save_config(updated)
+    CONFIG.update(updated)
+    # Source is deliberately retained for recovery. Restart is required.
+
 
 
 def storage_budget(path):
