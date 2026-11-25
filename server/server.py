@@ -147,6 +147,9 @@ _log_buffer = deque(maxlen=500)
 
 
 def log(msg):
+    if len(sys.argv) > 1 and sys.argv[1] == "--migrate-storage":
+        print(msg, flush=True)
+        return
     line = time.strftime("%Y-%m-%d %H:%M:%S ") + msg
     with _log_lock:
         _log_buffer.append(line)
@@ -558,11 +561,14 @@ def storage_verified_copy(uid):
                     dest.write(chunk)
                 dest.flush()
                 os.fsync(dest.fileno())
+            shutil.copystat(src, dst, follow_symlinks=False)
             if storage_file_digest(dst) != before or storage_file_digest(src) != before:
                 raise RuntimeError("Prüfsummenabweichung: " + src)
             copied += 1
             JOB.progress(100 * copied / max(1, plan["files"]), "Datei geprüft: " + name)
             migration_status("running", uuid=uid, percent=int(99 * copied / max(1, plan["files"])), files_done=copied, files_total=plan["files"])
+    for root, dirs, files in os.walk(source, topdown=False, followlinks=False):
+        shutil.copystat(root, os.path.join(target, os.path.relpath(root, source)), follow_symlinks=False)
     log("Verifizierte Dateikopie erstellt; Quelle unverändert: " + target)
     return plan
 
