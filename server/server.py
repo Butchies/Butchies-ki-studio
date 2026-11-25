@@ -1778,8 +1778,8 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/storage/migrate":
             if data.get("confirmed") is not True:
                 return self.error("Ausdrückliche Bestätigung erforderlich")
-            if DRYRUN or JOB.running:
-                return self.error("Speicherverlagerung momentan nicht möglich")
+            if DRYRUN or JOB.running or "BKI_DATA" in os.environ:
+                return self.error("Speicherverlagerung momentan nicht möglich (Auftrag oder fester Datenpfad)")
             uid = str(data.get("uuid", ""))
             try:
                 plan = storage_expansion_plan(uid)
@@ -1823,7 +1823,10 @@ class Handler(BaseHTTPRequestHandler):
             if data.get("confirmed") is not True:
                 return self.error("Ausdrückliche Bestätigung erforderlich")
             approved = dict(CONFIG.get("approved_storage") or {})
-            approved.pop(str(data.get("uuid", "")), None)
+            uid = str(data.get("uuid", ""))
+            if uid and uid == (CONFIG.get("active_storage") or {}).get("uuid"):
+                return self.error("Aktiver Datenträger kann nicht widerrufen werden")
+            approved.pop(uid, None)
             CONFIG["approved_storage"] = approved
             save_config(CONFIG)
             return self.send_json({"ok": True})
