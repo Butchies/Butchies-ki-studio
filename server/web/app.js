@@ -112,7 +112,8 @@ function setView(v) {
   if (v === "ext") loadExt();
   if (v === "images") loadImages();
   if (v === "system") { loadUpdates(); loadLogs(); }
-  if (v === "settings") loadSettings();
+  if (v === "settings") { loadSettings(); loadWorkspace(); }
+  if (v === "chat") loadWorkspace();
 }
 
 // ---------------------------------------------------------------- Status
@@ -184,7 +185,7 @@ function renderStatus(s) {
     $("m-temp").textContent = s.temp == null ? "–" : s.temp + " °C";
     const h = Math.floor(s.uptime / 3600), m = Math.floor((s.uptime % 3600) / 60);
     $("m-up").textContent = h + " Std. " + m + " Min.";
-    $("wol-box").textContent = "MAC  " + (s.mac || "–") + "\nIP   " + (s.ip || "–") + "\nName " + s.host + ".local";
+    $("wol-box").textContent = "MAC  " + (s.mac || "–") + "\nIP   " + (s.ip || "–") + "\nName " + s.host;
     $("idle-info").textContent = s.sleep_blockers.length
       ? "Schläft gerade nicht, weil: " + s.sleep_blockers.join(", ") + "."
       : "Ohne Nutzung seit " + Math.floor(s.idle_seconds / 60) + " Minuten.";
@@ -307,6 +308,7 @@ function messageEl(m) {
 function renderMessages() {
   const box = $("messages"); box.innerHTML = "";
   const c = currentChat();
+  renderWorkspacePicker();
   if (!c || !c.messages.length) {
     box.innerHTML = '<div class="empty"><h1>Was soll ich für dich tun?</h1><p>Frag nach Code, lass dir Fehler erklären oder füge eine Textdatei ein. Alles bleibt auf deinem Mini-PC.</p></div>';
     return;
@@ -341,6 +343,11 @@ $("composer").addEventListener("submit", async (e) => {
     c = { id: Date.now().toString(36), title: (text || "Bild").slice(0, 40).replace(/\s+/g, " "), messages: [] };
     state.chats.unshift(c); state.current = c.id;
   }
+  c.workspace = {
+    bot: $("chat-bot").value,
+    memory: selectedSources("memory"),
+    documents: selectedSources("library"),
+  };
   c.messages.push(imgs.length ? { role: "user", content: text, images: imgs } : { role: "user", content: text });
   state.pendingImages = []; renderAttach();
   const bot = { role: "assistant", content: "", think: "" };
@@ -352,11 +359,12 @@ $("composer").addEventListener("submit", async (e) => {
   const live = box.lastChild;
   live.classList.add("cursor");
   const ctrl = new AbortController(); state.streaming = ctrl;
+  state.lastUsage = null; $("token-last").disabled = true;
   $("send-btn").disabled = true; $("stop-btn").hidden = false;
   try {
     const r = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
-      body: JSON.stringify({ messages: c.messages.slice(0, -1).map((m) => (m.images ? { role: m.role, content: m.content, images: m.images } : { role: m.role, content: m.content })) }),
+      body: JSON.stringify({ ...c.workspace, messages: c.messages.slice(0, -1).map((m) => (m.images ? { role: m.role, content: m.content, images: m.images } : { role: m.role, content: m.content })) }),
     });
     if (!r.ok) { let d = {}; try { d = await r.json(); } catch (x) { /* */ } throw new Error(d.error || "Fehler " + r.status); }
     const reader = r.body.getReader(); const dec = new TextDecoder(); let buf = ""; let last = 0;
@@ -372,6 +380,14 @@ $("composer").addEventListener("submit", async (e) => {
         if (payload === "[DONE]") continue;
         try {
           const j = JSON.parse(payload);
+          const usage = j.usage;
+          if (usage && Number.isInteger(usage.prompt_tokens) && Number.isInteger(usage.completion_tokens)) {
+            state.lastUsage = [usage.prompt_tokens, usage.completion_tokens];
+            $("token-last").disabled = false;
+          } else if (Number.isInteger(j.timings?.prompt_n) && Number.isInteger(j.timings?.predicted_n)) {
+            state.lastUsage = [j.timings.prompt_n, j.timings.predicted_n];
+            $("token-last").disabled = false;
+          }
           const d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
           if (d.reasoning_content) bot.think += d.reasoning_content;
           if (d.content) bot.content += d.content;
@@ -469,6 +485,154 @@ async function loadLogs() {
 }
 $("logs-reload").addEventListener("click", loadLogs);
 
+// ---------------------------------------------------------------- Studio-Bereiche
+const workspaceLabels = {
+  bots: ["KI-Bots", "Eigene Rollenprofile speichern und im Chat auswählen.", 9000],
+  memory: ["Gedächtnis", "Wichtige Fakten dauerhaft speichern und bei Bedarf dem Chat mitgeben.", 2000],
+  library: ["Bibliothek", "Textdateien speichern, auswählen, bearbeiten oder löschen.", 40000],
+};
+let workspaceSection = "performance";
+let editingWorkspaceId = "";
+let renderedChat;
+function selectedSources(kind) {
+  return [...$("chat-sources").querySelectorAll("input:checked")].filter((el) => el.dataset.kind === kind).map((el) => el.value);
+}
+function renderWorkspacePicker(force = false) {
+  if (!state.workspace) return;
+  const chat = currentChat();
+  if (!force && renderedChat === chat?.id) return;
+  const choice = renderedChat === chat?.id
+    ? { bot: $("chat-bot").value, memory: selectedSources("memory"), documents: selectedSources("library") }
+    : (chat?.workspace || {});
+  renderedChat = chat?.id;
+  const select = $("chat-bot");
+  select.replaceChildren(new Option("Allgemein", ""));
+  [...state.workspace.presets, ...state.workspace.workspace.bots].forEach((bot) => select.add(new Option(bot.name, bot.id)));
+  select.value = choice.bot || "";
+  if (select.selectedIndex < 0) select.selectedIndex = 0;
+  const target = $("chat-sources");
+  target.replaceChildren();
+  for (const kind of ["memory", "library"]) {
+    const rows = state.workspace.workspace[kind];
+    if (!rows.length) continue;
+    const group = document.createElement("fieldset");
+    const heading = document.createElement("legend");
+    heading.textContent = workspaceLabels[kind][0];
+    group.appendChild(heading);
+    rows.forEach((row) => {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox"; input.value = row.id; input.dataset.kind = kind;
+      input.checked = (choice[kind === "memory" ? "memory" : "documents"] || []).includes(row.id);
+      label.append(input, document.createTextNode(" " + row.name));
+      group.appendChild(label);
+    });
+    target.appendChild(group);
+  }
+}
+function editWorkspace(row) {
+  editingWorkspaceId = row?.id || "";
+  $("workspace-name").value = row?.name || "";
+  $("workspace-text").value = row?.text || "";
+  $("workspace-file").value = "";
+}
+function renderWorkspaceList() {
+  const box = $("workspace-list");
+  box.replaceChildren();
+  const records = state.workspace?.workspace[workspaceSection] || [];
+  const presets = workspaceSection === "bots" ? (state.workspace?.presets || []) : [];
+  [...presets, ...records].forEach((row) => {
+    const item = document.createElement("div"); item.className = "workspace-row";
+    const title = document.createElement("span"); title.textContent = row.name;
+    item.appendChild(title);
+    if (presets.includes(row)) {
+      const tag = document.createElement("span"); tag.className = "muted"; tag.textContent = "Vorlage";
+      item.appendChild(tag);
+    } else {
+      const edit = document.createElement("button"); edit.className = "btn small"; edit.textContent = "Bearbeiten";
+      edit.addEventListener("click", () => editWorkspace(row));
+      const remove = document.createElement("button"); remove.className = "btn small"; remove.textContent = "Löschen";
+      remove.addEventListener("click", async () => {
+        if (!confirm("„" + row.name + "“ dauerhaft löschen?")) return;
+        try {
+          state.workspace = await api("/api/workspace", { kind: workspaceSection, action: "delete", id: row.id });
+          if (editingWorkspaceId === row.id) editWorkspace();
+          renderWorkspaceList(); renderWorkspacePicker(true);
+          $("workspace-msg").textContent = "Eintrag gelöscht.";
+        } catch (error) { $("workspace-msg").textContent = error.message; }
+      });
+      item.append(edit, remove);
+    }
+    box.appendChild(item);
+  });
+}
+async function loadWorkspace() {
+  try {
+    state.workspace = await api("/api/workspace");
+    renderWorkspacePicker(true);
+    renderWorkspaceList();
+  } catch (error) { $("workspace-msg").textContent = error.message; }
+}
+function openSettingsSection(section) {
+  workspaceSection = section;
+  document.querySelectorAll("[data-settings]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.settings === section)));
+  const editor = workspaceLabels[section];
+  $("workspace-editor").hidden = !editor;
+  $("settings-form").hidden = section !== "performance";
+  $("token-form").hidden = section !== "tokens";
+  $("pw-form").hidden = section !== "password";
+  $("connection-panel").hidden = section !== "connection";
+  if (!editor) return;
+  $("workspace-title").textContent = editor[0];
+  $("workspace-help").textContent = editor[1];
+  $("workspace-text").maxLength = editor[2];
+  $("workspace-file").hidden = $("workspace-file-label").hidden = section !== "library";
+  $("workspace-msg").textContent = "";
+  editWorkspace();
+  renderWorkspaceList();
+}
+document.querySelectorAll("[data-settings]").forEach((b) => b.addEventListener("click", () => openSettingsSection(b.dataset.settings)));
+openSettingsSection("performance");
+$("workspace-reset").addEventListener("click", () => editWorkspace());
+$("workspace-file").addEventListener("change", async () => {
+  const file = $("workspace-file").files[0];
+  if (!file) return;
+  try {
+    if (file.size > 160000) throw new Error("Textdatei zu groß.");
+    const content = await file.text();
+    if (workspaceSection !== "library") return;
+    if (content.length > workspaceLabels.library[2] || content.includes("\0")) throw new Error("Bitte eine Textdatei mit höchstens 40.000 Zeichen auswählen.");
+    $("workspace-text").value = content; $("workspace-name").value = file.name.slice(0, 120);
+  } catch (error) { $("workspace-msg").textContent = error.message; }
+});
+$("workspace-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const kind = workspaceSection;
+  try {
+    state.workspace = await api("/api/workspace", { kind, action: "save", id: editingWorkspaceId,
+      name: $("workspace-name").value, text: $("workspace-text").value });
+    if (kind === workspaceSection) { editWorkspace(); $("workspace-msg").textContent = "Gespeichert."; }
+    renderWorkspaceList(); renderWorkspacePicker(true);
+  } catch (error) { $("workspace-msg").textContent = error.message; }
+});
+$("token-last").addEventListener("click", () => {
+  if (!state.lastUsage) return;
+  [$("token-in").value, $("token-out").value] = state.lastUsage;
+});
+$("token-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const amount = (+$("token-in").value * +$("token-price-in").value + +$("token-out").value * +$("token-price-out").value) / 1e6;
+  $("token-result").textContent = "Geschätzte Kosten: " + new Intl.NumberFormat("de-DE", {
+    style: "currency", currency: $("token-currency").value, maximumFractionDigits: 8,
+  }).format(amount);
+});
+$("performance-gpu").addEventListener("click", () => {
+  $("s-backend").value = "vulkan"; $("s-gpu").value = 999; $("s-threads").value = 0;
+});
+$("performance-cpu").addEventListener("click", () => {
+  $("s-backend").value = "cpu"; $("s-gpu").value = 0; $("s-threads").value = 0;
+});
+
 // ---------------------------------------------------------------- Einstellungen
 async function loadSettings() {
   try {
@@ -477,6 +641,7 @@ async function loadSettings() {
     $("s-backend").value = s.backend; $("s-gpu").value = s.gpu_layers; $("s-ctx").value = s.ctx; $("s-threads").value = s.threads;
     $("s-repo").value = s.update_repo || ""; $("s-token").value = "";
     $("s-token").placeholder = s.github_token_set ? "gesetzt – leer lassen = unverändert" : "nicht gesetzt";
+    $("connection-host").textContent = location.host;
   } catch (e) { showErr(e); }
 }
 $("settings-form").addEventListener("submit", async (e) => {

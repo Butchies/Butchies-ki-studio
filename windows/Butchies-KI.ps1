@@ -27,8 +27,8 @@ if ($MiniPC -and $MiniPC -ne $cfg.host) {
   $cfg.host = $MiniPC; $cfg.ip = ""; $cfg.mac = ""
   if (Test-Path $pwFile) { Remove-Item $pwFile -Force }
 }
-function ServerName($name) { if ($name.Contains(".")) { $name } else { "$name.local" } }
 function Speichern { $cfg | ConvertTo-Json | Set-Content -Path $cfgFile -Encoding UTF8 }
+if ($cfg.host -ieq "butchies-ki.local") { $cfg.host = "butchies-ki"; Speichern }
 function LadePasswort {
   if (-not (Test-Path $pwFile)) { return "" }
   try {
@@ -43,7 +43,7 @@ function SpeicherePasswort($pw) {
 
 # --- Gemeinsamer Zustand mit dem Hintergrund-Thread -----------------------------
 $sync = [hashtable]::Synchronized(@{
-  Host = (ServerName $cfg.host); Base = ""; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
+  Host = $cfg.host; Base = ""; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
   State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
@@ -389,7 +389,7 @@ function ZeigeFenster {
   })
   $n.BtnSave.Add_Click({
     $h = $script:win.Tag.N.HostBox.Text.Trim().ToLower()
-    if ($h -match '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$' -and $h -ne $cfg.host) { SpeicherePasswort ""; $sync.Password = ""; $sync.AcceptedPassword = ""; $sync.Base = ""; $sync.Host = ServerName $h; $sync.Ip = ""; $sync.Mac = ""; $cfg.host = $h; $cfg.ip = ""; $cfg.mac = ""; Speichern }
+    if ($h -match '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$' -and $h -ne $cfg.host) { SpeicherePasswort ""; $sync.Password = ""; $sync.AcceptedPassword = ""; $sync.Base = ""; $sync.Host = $h; $sync.Ip = ""; $sync.Mac = ""; $cfg.host = $h; $cfg.ip = ""; $cfg.mac = ""; Speichern }
     AutostartSetzen ([bool]$script:win.Tag.N.AutoStart.IsChecked)
     $script:win.Tag.N.SettingsPanel.Visibility = "Collapsed"
   })

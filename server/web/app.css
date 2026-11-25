@@ -187,3 +187,14 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 #gate-recovery code { overflow-wrap: anywhere; }
 #gate-switch { align-self: center; border: 0; background: transparent; color: var(--accent); padding: 8px; cursor: pointer; text-decoration: underline; }
 #gate-success { margin: 0; padding: 7px 18px; background: var(--accent-dark); color: var(--text); }
+
+#view-settings { color-scheme: light; background: #f5faff; color: #14253d;
+  --bg: #f7fbff; --panel: #fff; --line: #cbdff2; --line2: #9ab3cc; --text: #14253d;
+  --muted: #455a72; --soft: #243951; --accent: #0067c0; --on-accent: #fff; --hover: #eaf4ff; }
+.settings-sections { display: flex; gap: 8px; flex-wrap: wrap; margin: 14px 0; }
+.settings-sections button[aria-pressed="true"] { background: #e1f0ff; border-color: #0067c0; color: #00559f; }
+.workspace-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--line); padding: 8px 0; }
+.workspace-row > span:first-child { flex: 1; overflow-wrap: anywhere; }
+.chat-workspace summary { cursor: pointer; color: var(--accent); }
+.chat-workspace fieldset { border: 1px solid var(--line); max-height: 9rem; overflow: auto; }
+.chat-workspace fieldset label { display: block; }

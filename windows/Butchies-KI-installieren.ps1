@@ -35,7 +35,7 @@ $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$en
 if ($edge) {
   $d = $sh.CreateShortcut((Join-Path $desktop "Butchies KI.lnk"))
   $d.TargetPath = $edge
-  $d.Arguments = "--app=http://localhost:8765/ --user-data-dir=`"$ziel\edge-profil`" --window-size=1400,900 --unsafely-treat-insecure-origin-as-secure=http://$name.local"
+  $d.Arguments = "--app=http://localhost:8765/ --user-data-dir=`"$ziel\edge-profil`" --window-size=1400,900 --unsafely-treat-insecure-origin-as-secure=http://$name"
   $d.IconLocation = "$edge,0"
   $d.Save()
 } else {
