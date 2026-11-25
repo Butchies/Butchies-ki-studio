@@ -1548,6 +1548,18 @@ class Handler(BaseHTTPRequestHandler):
             save_config(CONFIG)
             log("Passwort für die Oberfläche festgelegt")
             return self.send_json({"ok": True}, extra_headers=self.new_session_header())
+        if path == "/api/recover":
+            time.sleep(0.5)
+            if not CONFIG.get("ui_password") or str(data.get("code", "")) != "0000":
+                return self.error("Wiederherstellung nicht möglich", 403)
+            pw = str(data.get("password", ""))
+            if len(pw) < 4:
+                return self.error("Mindestens 4 Zeichen")
+            CONFIG["ui_password"] = hash_password(pw)
+            save_config(CONFIG)
+            SESSIONS.clear()
+            log("Passwort zurückgesetzt")
+            return self.send_json({"ok": True})
         if path == "/api/login":
             time.sleep(0.5)  # bremst Raten
             if (not CONFIG.get("ui_username") or str(data.get("username", "")).strip() == CONFIG["ui_username"]) and check_password(str(data.get("password", ""))):
