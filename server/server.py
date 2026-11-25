@@ -970,11 +970,18 @@ def first_setup():
             except Exception as ex:  # noqa: BLE001
                 log("Erweiterung %s fehlgeschlagen: %s" % (e, ex))
                 raise
-    try:
-        os.rename(os.path.join(ETC_DIR, "models-wanted.json"), os.path.join(ETC_DIR, "models-wanted.done.json"))
-    except OSError:
-        pass
     LLAMA.restart()
+    if CONFIG.get("active_model"):
+        for attempt in range(150):
+            if LLAMA.healthy():
+                break
+            JOB.progress(96, "Warte auf die KI-Laufzeit …")
+            time.sleep(2)
+        else:
+            raise RuntimeError("KI-Laufzeit nicht bereit; Ersteinrichtung bleibt offen")
+    pending = os.path.join(ETC_DIR, "models-wanted.json")
+    if os.path.isfile(pending):
+        os.replace(pending, os.path.join(ETC_DIR, "models-wanted.done.json"))
 
 
 # ---------------------------------------------------------------------------
