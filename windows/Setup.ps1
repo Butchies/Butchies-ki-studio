@@ -109,9 +109,9 @@ function Download($url, $dest, $label, $pFrom, $pTo) {
 switch ($task) {
 
 "start" {
-  try { $sync.Latest = (GetText "https://raw.githubusercontent.com/$($sync.Repo)/main/VERSION").Trim() } catch { $sync.Latest = "" }
+  try { $sync.Latest = (GetText "https://raw.githubusercontent.com/$($sync.Repo)/fix/0.4.6-login/VERSION").Trim() } catch { $sync.Latest = "" }
   try {
-    $cat = GetText "https://raw.githubusercontent.com/$($sync.Repo)/main/modelle.json"
+    $cat = GetText "https://raw.githubusercontent.com/$($sync.Repo)/fix/0.4.6-login/modelle.json"
     Set-Content -Path (Join-Path $sync.Cache "modelle.json") -Value $cat -Encoding UTF8
   } catch {}
   $f = Join-Path $sync.Cache "modelle.json"
@@ -225,9 +225,9 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
 
 "payload" {
   # Neueste Butchies-Dateien von GitHub (Offline: letzter Stand im Cache, sonst neben dem Setup)
-  $zip = Join-Path $sync.Cache "butchies-main.zip"; $dir = Join-Path $sync.Cache "butchies-main"
+  $zip = Join-Path $sync.Cache "butchies-046-login.zip"; $dir = Join-Path $sync.Cache "butchies-046-login"
   try {
-    $bytes = $http.GetByteArrayAsync("https://codeload.github.com/$($sync.Repo)/zip/refs/heads/main").Result
+    $bytes = $http.GetByteArrayAsync("https://codeload.github.com/$($sync.Repo)/zip/refs/heads/fix/0.4.6-login").Result
     [IO.File]::WriteAllBytes($zip, $bytes)
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     Expand-Archive -Path $zip -DestinationPath $dir -Force
