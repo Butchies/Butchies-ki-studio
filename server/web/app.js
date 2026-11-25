@@ -371,6 +371,7 @@ $("composer").addEventListener("submit", async (e) => {
 async function loadModels() {
   try {
     const d = await api("/api/models");
+    populateChatModels(d.installed);
     $("models-free").textContent = "Freier Platz auf der SSD: " + fmtGB(d.free);
     const inst = $("models-installed"); inst.innerHTML = "";
     if (!d.installed.length) inst.innerHTML = '<p class="muted">Noch kein Modell installiert.</p>';
@@ -639,6 +640,7 @@ $("img-form").addEventListener("submit", async (e) => {
 // ---------------------------------------------------------------- Start
 let pollTimer = null;
 function startApp() {
+  refreshChatModels();
   $("gate").hidden = true; $("app").hidden = false;
   loadChats(); renderHistory(); renderMessages(); setView(state.view);
   pollStatus();
@@ -667,3 +669,21 @@ $("gate-recover").addEventListener("click", async () => {
 
 $("sidebar-toggle").addEventListener("click", () => document.querySelector(".layout").classList.toggle("sidebar-collapsed"));
 $("messages").addEventListener("click", e => { const b=e.target.closest("[data-quick]"); if(b) document.querySelector(`.nav[data-view="${b.dataset.quick}"]`)?.click(); });
+
+function populateChatModels(models) {
+  const select = $("chat-model");
+  select.replaceChildren();
+  if (!models.length) { select.add(new Option("Kein Modell installiert", "")); select.disabled=true; return; }
+  select.disabled=false;
+  models.slice().sort((a,b)=>a.name.localeCompare(b.name,"de")).forEach(m=>select.add(new Option(m.name,m.file,false,!!m.active)));
+}
+async function refreshChatModels() {
+  try { const d=await api("/api/models"); populateChatModels(d.installed); } catch(e) { $("chat-model").disabled=true; }
+}
+$("chat-model").addEventListener("change", async () => {
+  const select=$("chat-model"); if(!select.value)return;
+  select.disabled=true; $("send-btn").disabled=true;
+  try { await api("/api/models/activate",{file:select.value}); await pollStatus(); }
+  catch(e){showErr(e);}
+  finally { await refreshChatModels(); $("send-btn").disabled=false; }
+});
