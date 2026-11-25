@@ -842,7 +842,7 @@ function ZeigeKiListe {
 }
 function SummeKi {
   $sum = 0.0; foreach ($cb in $script:kiChecks) { if ($cb.IsChecked) { $o = $cb.Tag.Obj; $sum += [double]$(if ($o.live_gb) { $o.live_gb } else { $o.size_gb }) } }
-  $ui.KiSum.Text = ("Ausgewählt: {0:N1} GB" -f $sum) + $(if ($sync.Autopilot) { " · Vorschlag vom KI-Autopiloten – entscheiden tust du" } else { "" })
+  $ui.KiSum.Text = ("Ausgewählt: {0:N1} GB · 10 % Speicherreserve" -f $sum) + $(if ($sync.Autopilot) { " · Vorschlag vom KI-Autopiloten – entscheiden tust du" } else { "" })
 }
 $ui.BtnCustom.Add_Click({
   $u = $ui.CustomUrl.Text.Trim()
@@ -955,9 +955,9 @@ $ui.BtnNext.Add_Click({
       if ($stick) {
         $need = 8 + ($models | ForEach-Object { if ($_.live_gb) { $_.live_gb } else { $_.size_gb } } | Measure-Object -Sum).Sum
         $d = $sync.Choice.DiskInfo
-        if ($sync.Choice.Mode -eq "neu" -and $d.Size / 1e9 -lt $need) { Fehler ("Für Modelle auf dem Stick braucht er ca. {0:N0} GB – dieser hat {1:N0} GB." -f $need, ($d.Size / 1e9)); return }
+        if ($sync.Choice.Mode -eq "neu" -and $d.Size / 1e9 * 0.90 -lt $need) { Fehler ("Für System und Modelle werden ca. {0:N0} GB benötigt. Stick: {1:N0} GB gesamt; maximal 90 % nutzbar." -f $need, ($d.Size / 1e9)); return }
         if ($sync.Choice.Mode -eq "abgleich" -and -not $d.Models) { Fehler "Dieser Stick hat keinen Bereich für Modelle – dafür bitte einen neuen Stick erstellen."; return }
-        if ($custom.Count) { Fehler "Eigene Modelle lädt der Mini-PC selbst – sie kommen nicht auf den Stick."; }
+        if ($custom.Count) { Fehler "Eigene Modelle lädt der Mini-PC selbst – bitte diese Option auswählen."; return }
       }
       $sync.Choice.Models = $models; $sync.Choice.Extensions = $exts; $sync.Choice.Custom = $custom; $sync.Choice.ModelsOnStick = $stick; $sync.Choice.Picked = $picked
       GeheZu 5
@@ -1027,7 +1027,7 @@ $timer.Add_Tick({
   if ($script:step -eq 8 -and $sync.Follow) {
     $f = $sync.Follow
     $ui.FPhase.Text = "Mini-PC: $($f.Phase)"; $ui.FPct.Text = "$($f.Percent) %"; $ui.FText.Text = $f.Text; SetBlocks $ui.FBlocks $f.Percent
-    $ui.FConsole.Text = ($sync.Log | Select-Object -Last 100) -join "`n"; $ui.FConsole.ScrollToEnd()
+    $ui.FConsole.Text = ($sync.Log) -join "`n"; $ui.FConsole.ScrollToEnd()
   }
 })
 $timer.Start()
