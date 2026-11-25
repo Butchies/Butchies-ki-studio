@@ -653,3 +653,12 @@ function startApp() {
     document.body.textContent = "Butchies KI Studio ist gerade nicht erreichbar: " + e.message;
   }
 })();
+
+$("gate-recover").addEventListener("click", async () => {
+  const code = prompt("Wiederherstellungscode");
+  if (code === null) return;
+  const pw = prompt("Neues Passwort (mindestens 4 Zeichen)");
+  if (pw === null) return;
+  if (pw.length < 4 || pw !== prompt("Neues Passwort wiederholen")) { $("gate-error").textContent = "Passwörter prüfen."; return; }
+  try { await api("/api/recover", {code, password: pw}); showGate(false); $("gate-error").textContent = "Passwort geändert. Bitte anmelden."; } catch(e) { $("gate-error").textContent = e.message; }
+});
