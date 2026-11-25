@@ -1760,6 +1760,27 @@ class Handler(BaseHTTPRequestHandler):
             return self.error("Bitte anmelden", 401)
         ACTIVITY.touch()
 
+        if path == "/api/storage/migrate":
+            if data.get("confirmed") is not True:
+                return self.error("Ausdrückliche Bestätigung erforderlich")
+            if DRYRUN or JOB.running:
+                return self.error("Speicherverlagerung momentan nicht möglich")
+            uid = str(data.get("uuid", ""))
+            try:
+                plan = storage_expansion_plan(uid)
+                if not plan["fits"]:
+                    return self.error("Zu wenig Speicher")
+                unit = "butchies-storage-migration"
+                script = os.path.abspath(__file__)
+                # Separate systemd unit survives shutdown of the web service.
+                command = ["systemd-run", "--unit=" + unit, "--collect",
+                           "/bin/sh", "-c",
+                           'systemctl stop butchies-ki.service || exit 1; "$1" "$2" --migrate-storage "$3"; rc=$?; systemctl start butchies-ki.service || exit 1; exit "$rc"',
+                           "migration", sys.executable, script, uid]
+                subprocess.check_output(command, stderr=subprocess.STDOUT, timeout=15)
+                return self.send_json({"ok": True, "message": "Verlagerung beauftragt; Server wird neu gestartet"})
+            except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
+                return self.error(str(exc))
         if path == "/api/storage/plan":
             try:
                 return self.send_json({"ok": True, "plan": storage_expansion_plan(str(data.get("uuid", "")))})
