@@ -28,6 +28,7 @@ import re
 import secrets
 import shutil
 import socket
+import sys
 import subprocess
 import tarfile
 import threading
@@ -2085,5 +2086,24 @@ def main():
     srv.serve_forever()
 
 
+def offline_storage_migration(uid):
+    if DRYRUN:
+        raise RuntimeError("Speicherverlagerung im Testmodus gesperrt")
+    if os.geteuid() != 0:
+        raise RuntimeError("Administratorrechte erforderlich")
+    status = subprocess.check_output(["systemctl", "show", "butchies-ki.service",
+                                      "--property=ActiveState", "--value"], text=True, timeout=10).strip()
+    if status != "inactive":
+        raise RuntimeError("Serverdienst muss vollständig gestoppt sein")
+    plan = storage_verified_copy(uid)
+    storage_activate_verified(plan)
+    print("Speicherumschaltung gespeichert. Originaldaten bleiben erhalten.", flush=True)
+
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 3 and sys.argv[1] == "--migrate-storage":
+        offline_storage_migration(sys.argv[2])
+    elif len(sys.argv) == 1:
+        main()
+    else:
+        sys.exit("Unbekannte Startoption")
