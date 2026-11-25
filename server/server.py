@@ -904,11 +904,11 @@ def knowledge_add(category, content):
                           (category, content.strip(), time.time())).lastrowid
 
 
-def knowledge_search(query="", limit=100, category=None):
+def knowledge_search(query="", limit=100, category=None, before=None):
     from contextlib import closing
     with closing(knowledge_db()) as db:
-        rows = db.execute("SELECT id,category,content,created FROM memories WHERE (? IS NULL OR category=?) AND (instr(lower(content),lower(?))>0 OR instr(lower(category),lower(?))>0) ORDER BY id DESC LIMIT ?",
-                          (category, category, query, query, min(500,max(1,int(limit))))).fetchall()
+        rows = db.execute("SELECT id,category,content,created FROM memories WHERE (? IS NULL OR id<?) AND (? IS NULL OR category=?) AND (instr(lower(content),lower(?))>0 OR instr(lower(category),lower(?))>0) ORDER BY id DESC LIMIT ?",
+                          (before, before, category, category, query, query, min(500,max(1,int(limit))))).fetchall()
     return [dict(zip(("id","category","content","created"), row)) for row in rows]
 
 
@@ -2064,7 +2064,12 @@ class Handler(BaseHTTPRequestHandler):
             category = data.get("category")
             if category is not None and (not isinstance(category,str) or len(category)>100):
                 return self.error("Ungültige Kategorie")
-            return self.send_json({"ok": True, "entries": knowledge_search(query, 500, category)})
+            before = data.get("before")
+            if before is not None and (type(before) is not int or before < 1):
+                return self.error("Ungültige Seitennavigation")
+            entries = knowledge_search(query, 101, category, before)
+            return self.send_json({"ok": True, "entries": entries[:100],
+                                   "next_before": entries[99]["id"] if len(entries)>100 else None})
         if path == "/api/team/config":
             enabled = data.get("enabled")
             roles = data.get("roles", {})
