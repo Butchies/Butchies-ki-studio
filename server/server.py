@@ -847,6 +847,35 @@ def team_plan(messages):
         conn.close()
 
 
+def knowledge_db():
+    import sqlite3
+    folder = os.path.join(DATA_DIR, "knowledge")
+    os.makedirs(folder, mode=0o700, exist_ok=True)
+    db = sqlite3.connect(os.path.join(folder, "memory.sqlite3"), timeout=15)
+    db.execute("CREATE TABLE IF NOT EXISTS memories (id INTEGER PRIMARY KEY, category TEXT NOT NULL, content TEXT NOT NULL, created REAL NOT NULL)")
+    return db
+
+
+def knowledge_add(category, content):
+    if not isinstance(category, str) or not isinstance(content, str) or not content.strip():
+        raise ValueError("Ungültiger Wissenseintrag")
+    if len(category) > 100 or len(content) > 32000:
+        raise ValueError("Wissenseintrag zu groß")
+    require_storage(DATA_DIR, 262144 + len(content.encode("utf-8")) * 4)
+    from contextlib import closing
+    with closing(knowledge_db()) as db, db:
+        return db.execute("INSERT INTO memories(category,content,created) VALUES(?,?,?)",
+                          (category, content.strip(), time.time())).lastrowid
+
+
+def knowledge_search(query="", limit=100):
+    from contextlib import closing
+    with closing(knowledge_db()) as db:
+        rows = db.execute("SELECT id,category,content,created FROM memories WHERE instr(lower(content),lower(?))>0 OR instr(lower(category),lower(?))>0 ORDER BY id DESC LIMIT ?",
+                          (query, query, min(500,max(1,int(limit))))).fetchall()
+    return [dict(zip(("id","category","content","created"), row)) for row in rows]
+
+
 def model_meta(fn):
     """Katalog-Eintrag zu einer installierten Modelldatei (oder {})."""
     try:
@@ -1745,6 +1774,8 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/api/team/status":
             return self.send_json({"ok": True, "status": dict(TEAM_STATUS)})
+        if path == "/api/knowledge":
+            return self.send_json({"ok": True, "entries": knowledge_search()})
         if path == "/api/team":
             return self.send_json({"ok": True, "team": CONFIG.get("ai_team", {"enabled": False, "roles": {}}),
                                    "models": installed_models()})
@@ -1902,6 +1933,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json({"ok": True, "message": "Verlagerung beauftragt; Server wird neu gestartet"})
             except (OSError, RuntimeError, subprocess.SubprocessError, ValueError) as exc:
                 return self.error(str(exc))
+        if path == "/api/knowledge/add":
+            try:
+                return self.send_json({"ok": True, "id": knowledge_add(data.get("category", "Allgemein"), data.get("content"))})
+            except (ValueError, OSError, RuntimeError) as exc:
+                return self.error(str(exc))
+        if path == "/api/knowledge/search":
+            query = data.get("query", "")
+            if not isinstance(query, str) or len(query)>1000:
+                return self.error("Ungültige Suche")
+            return self.send_json({"ok": True, "entries": knowledge_search(query)})
         if path == "/api/team/config":
             enabled = data.get("enabled")
             roles = data.get("roles", {})
