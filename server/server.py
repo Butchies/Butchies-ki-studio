@@ -847,12 +847,12 @@ def team_plan(messages):
         conn.close()
 
 
-def knowledge_backup():
+def knowledge_backup(force=False):
     import sqlite3
     from contextlib import closing
     folder = os.path.join(DATA_DIR, "knowledge", "backups")
     os.makedirs(folder, mode=0o700, exist_ok=True)
-    stamp = time.strftime("%Y%m%d", time.gmtime())
+    stamp = time.strftime("%Y%m%d-%H%M%S" if force else "%Y%m%d", time.gmtime())
     target = os.path.join(folder, "knowledge-" + stamp + ".sqlite3")
     if os.path.exists(target):
         return target
@@ -2028,6 +2028,12 @@ class Handler(BaseHTTPRequestHandler):
                                if n.startswith("knowledge-") and n.endswith(".sqlite3") and os.path.isfile(os.path.join(folder,n))) if os.path.isdir(folder) else 0
             return self.send_json({"ok": True, "entries": count, "characters": chars, "database_bytes": size,
                                    "backup_bytes": backup_bytes, "categories": dict(categories)})
+        if path == "/api/knowledge/backup-now":
+            try:
+                target = knowledge_backup(force=True)
+                return self.send_json({"ok": True, "name": os.path.basename(target)})
+            except Exception as exc:
+                return self.error("Sicherung fehlgeschlagen: " + str(exc))
         if path == "/api/knowledge/backups":
             folder = os.path.join(DATA_DIR, "knowledge", "backups")
             names = sorted((n for n in os.listdir(folder) if n.startswith("knowledge-") and n.endswith(".sqlite3")), reverse=True) if os.path.isdir(folder) else []
@@ -2037,7 +2043,7 @@ class Handler(BaseHTTPRequestHandler):
             import re
             from contextlib import closing
             name = data.get("name")
-            if data.get("confirmed") is not True or not isinstance(name,str) or not re.fullmatch(r"knowledge-[0-9]{8}\.sqlite3",name):
+            if data.get("confirmed") is not True or not isinstance(name,str) or not re.fullmatch(r"knowledge-[0-9]{8}(?:-[0-9]{6})?\.sqlite3",name):
                 return self.error("Ungültige oder unbestätigte Wiederherstellung")
             source = os.path.join(DATA_DIR,"knowledge","backups",name)
             if not os.path.isfile(source) or os.path.islink(source):
