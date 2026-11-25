@@ -969,6 +969,7 @@ def first_setup():
                 INSTALLERS[e]()
             except Exception as ex:  # noqa: BLE001
                 log("Erweiterung %s fehlgeschlagen: %s" % (e, ex))
+                raise
     try:
         os.rename(os.path.join(ETC_DIR, "models-wanted.json"), os.path.join(ETC_DIR, "models-wanted.done.json"))
     except OSError:
@@ -1587,11 +1588,13 @@ def apply_catalog(data):
 
 
 def load_catalog_cache():
-    try:
-        with open(CATALOG_CACHE, encoding="utf-8") as f:
-            apply_catalog(json.load(f))
-    except (OSError, ValueError):
-        pass
+    for path in (CATALOG_CACHE, os.path.join(os.path.dirname(os.path.abspath(__file__)), "modelle.json")):
+        try:
+            with open(path, encoding="utf-8-sig") as f:
+                apply_catalog(json.load(f))
+            return
+        except (OSError, ValueError) as exc:
+            log("Modellkatalog nicht geladen: " + str(exc))
 
 
 def refresh_catalog():
@@ -2454,7 +2457,7 @@ class Handler(BaseHTTPRequestHandler):
 def setup_with_retry():
     """Ersteinrichtung starten; bei Fehler (z. B. Netz noch nicht da) automatisch wiederholen."""
     for attempt in range(1, 31):
-        if llama_binary() and installed_models():
+        if llama_binary() and installed_models() and not os.path.isfile(os.path.join(ETC_DIR, "models-wanted.json")):
             return
         if not JOB.running:
             JOB.start("Ersteinrichtung", first_setup)
@@ -2480,7 +2483,7 @@ def main():
     if ext_installed("vision"):
         VISION.start()
     threading.Thread(target=sleep_thread, daemon=True).start()
-    if llama_binary() and installed_models():
+    if llama_binary() and installed_models() and not os.path.isfile(os.path.join(ETC_DIR, "models-wanted.json")):
         if not CONFIG.get("active_model"):
             CONFIG["active_model"] = installed_models()[0]["file"]
             save_config(CONFIG)
