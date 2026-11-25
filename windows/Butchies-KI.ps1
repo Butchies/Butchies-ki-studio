@@ -19,9 +19,9 @@ $cfgDir = Join-Path $env:APPDATA "ButchiesKI"
 $cfgFile = Join-Path $cfgDir "taskleiste.json"
 $pwFile = Join-Path $cfgDir "passwort.dat"
 New-Item -ItemType Directory -Force -Path $cfgDir | Out-Null
-$cfg = @{ host = "butchies-ki"; mac = ""; ip = "" }
+$cfg = @{ host = "butchies-ki"; mac = ""; ip = ""; username = "" }
 foreach ($f in @($cfgFile, (Join-Path $cfgDir "weck-helfer.json"))) {
-  if (Test-Path $f) { try { $j = Get-Content $f -Raw | ConvertFrom-Json; foreach ($k in "host", "mac", "ip") { if ($j.$k) { $cfg[$k] = $j.$k } }; break } catch {} }
+  if (Test-Path $f) { try { $j = Get-Content $f -Raw | ConvertFrom-Json; foreach ($k in "host", "mac", "ip", "username") { if ($j.$k) { $cfg[$k] = $j.$k } }; break } catch {} }
 }
 if ($MiniPC) { $cfg.host = $MiniPC }
 function Speichern { $cfg | ConvertTo-Json | Set-Content -Path $cfgFile -Encoding UTF8 }
@@ -39,7 +39,7 @@ function SpeicherePasswort($pw) {
 
 # --- Gemeinsamer Zustand mit dem Hintergrund-Thread -----------------------------
 $sync = [hashtable]::Synchronized(@{
-  Host = $cfg.host; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
+  Host = $cfg.host; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort); Username = $cfg.username
   State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
@@ -83,9 +83,9 @@ $worker = {
   }
   function Anmelden {
     if (-not $sync.Password) { $sync.State = "anmelden"; return $false }
-    $r = Anfrage "POST" "/api/login" @{ password = $sync.Password } 5000
+    $r = Anfrage "POST" "/api/login" @{ username = $sync.Username; password = $sync.Password } 5000
     if ($r.Code -eq 200) { $sync.LoginError = ""; return $true }
-    if ($r.Code -eq 401) { $sync.LoginError = "Passwort falsch"; $sync.Password = ""; $sync.State = "anmelden" }
+    if ($r.Code -eq 401) { $sync.LoginError = "Benutzername oder Passwort falsch"; $sync.Password = ""; $sync.State = "anmelden" }
     return $false
   }
   $lastLearn = [datetime]::MinValue; $wasRunning = $false
@@ -252,6 +252,8 @@ $xamlVorlage = @'
       </DockPanel>
 
       <StackPanel x:Name="LoginPanel" Margin="0,14,0,0" Visibility="Collapsed">
+        <TextBlock Text="Benutzername" Foreground="%Sub%" Margin="0,0,0,6"/>
+        <TextBox x:Name="UserBox" Height="32" Padding="6,5" Background="%Input%" Foreground="%Text%" BorderBrush="%BtnBorder%" Margin="0,0,0,8"/>
         <TextBlock Text="Passwort der Butchies-KI-Oberfläche:" Foreground="%Sub%" Margin="0,0,0,6"/>
         <PasswordBox x:Name="Pw" Height="32" Padding="6,5" Background="%Input%" Foreground="%Text%" BorderBrush="%BtnBorder%"/>
         <TextBlock x:Name="LoginMsg" Foreground="%Crit%" Margin="0,4,0,0"/>
@@ -348,11 +350,12 @@ function ZeigeFenster {
   $w = [Windows.Markup.XamlReader]::Parse($xaml)
   [System.Windows.Forms.Integration.ElementHost]::EnableModelessKeyboardInterop($w)
   $n = @{}
-  foreach ($name in "Pill", "PillText", "Sub", "LoginPanel", "Pw", "LoginMsg", "BtnLogin", "DataPanel", "CpuText", "CpuBar", "RamText", "RamBar", "DiskText", "DiskBar", "TempText", "TpsText", "KiText", "JobBox", "JobPct", "JobName", "JobBlocks", "JobText", "UpdateText", "Info", "BtnOpen", "BtnSleep", "BtnReboot", "SettingsPanel", "HostBox", "AutoStart", "BtnSave", "BtnForget", "LinkShutdown", "LinkSettings", "LinkQuit") {
+  foreach ($name in "Pill", "PillText", "Sub", "LoginPanel", "UserBox", "Pw", "LoginMsg", "BtnLogin", "DataPanel", "CpuText", "CpuBar", "RamText", "RamBar", "DiskText", "DiskBar", "TempText", "TpsText", "KiText", "JobBox", "JobPct", "JobName", "JobBlocks", "JobText", "UpdateText", "Info", "BtnOpen", "BtnSleep", "BtnReboot", "SettingsPanel", "HostBox", "AutoStart", "BtnSave", "BtnForget", "LinkShutdown", "LinkSettings", "LinkQuit") {
     $n[$name] = $w.FindName($name)
   }
   for ($i = 0; $i -lt 20; $i++) { $r = New-Object Windows.Shapes.Rectangle; $r.Margin = "1,0,1,0"; $r.RadiusX = 1; $r.RadiusY = 1; [void]$n.JobBlocks.Children.Add($r) }
   $w.Tag = @{ N = $n; T = $t }
+  $n.UserBox.Text = $sync.Username
 
   $n.BtnOpen.Add_Click({ OeffneOberflaeche; $script:win.Close() })
   $n.BtnSleep.Add_Click({
@@ -367,6 +370,8 @@ function ZeigeFenster {
   $n.BtnLogin.Add_Click({
     $pw = $script:win.Tag.N.Pw.Password
     if ($pw.Length -lt 4) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 4 Zeichen."; return }
+    $sync.Username = $script:win.Tag.N.UserBox.Text.Trim(); if (-not $sync.Username) { $script:win.Tag.N.LoginMsg.Text = "Benutzername eingeben."; return }
+    $cfg.username = $sync.Username; Speichern
     $sync.Password = $pw; SpeicherePasswort $pw; $sync.State = "unbekannt"; $sync.Queue.Enqueue("login")
     $script:win.Tag.N.LoginMsg.Text = "Melde an …"
   })
