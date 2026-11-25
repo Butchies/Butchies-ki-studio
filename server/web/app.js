@@ -865,16 +865,17 @@ async function openKnowledge() {
   const content=make("textarea");content.placeholder="Wissenseintrag";content.style.width="100%";
   const list=make("div");let editing=null;const selected=new Set();
   const usageInfo=make("p"); const categoryInfo=make("div");
+  let categoryFilter=null;
   async function load(){
-    const result=await api("/api/knowledge/search",{query:query.value});
+    const result=await api("/api/knowledge/search",{query:query.value,category:categoryFilter});
     selected.clear();list.replaceChildren();
     try {
       const usage=await api("/api/knowledge/usage",{});
       const mib=n=>(n/1048576).toFixed(2)+" MiB";
       usageInfo.textContent=usage.entries+" Einträge · Datenbank: "+mib(usage.database_bytes)+" · Sicherungen: "+mib(usage.backup_bytes);
-      categoryInfo.replaceChildren();
+      categoryInfo.replaceChildren(button("Alle Kategorien",()=>{categoryFilter=null;return load();}));
       for(const [name,count] of Object.entries(usage.categories)){
-        categoryInfo.append(button(name+" ("+count+")",()=>{query.value=name;category.value=name;return load();}));
+        categoryInfo.append(button(name+" ("+count+")",()=>{query.value="";categoryFilter=name;category.value=name;return load();}));
       }
     } catch(e){usageInfo.textContent="Speicherstatistik nicht verfügbar";}
     for(const entry of result.entries){
