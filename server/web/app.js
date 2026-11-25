@@ -879,6 +879,25 @@ async function openKnowledge() {
     if(!confirm("Ausgewählte Wissenseinträge endgültig löschen?"))return;
     await api("/api/knowledge/delete",{...payload,confirmed:true});editing=null;await load();
   }
+  async function exportKnowledge(markdown=false){
+    const archive=await api("/api/knowledge/export",{});
+    const body=markdown?archive.entries.map(e=> "## "+e.category+"\n\n"+e.content).join("\n\n---\n\n"):JSON.stringify(archive,null,2);
+    const url=URL.createObjectURL(new Blob([body],{type:markdown?"text/markdown;charset=utf-8":"application/json"}));
+    const link=make("a");link.href=url;link.download="Butchies-Wissen-"+new Date().toISOString().slice(0,10)+(markdown?".md":".json");
+    document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+  const file=make("input");file.type="file";file.accept=".json,application/json";file.hidden=true;
+  file.onchange=async()=>{
+    try{
+      const f=file.files[0];if(!f)return;
+      if(f.size>20*1024*1024)throw new Error("Archiv größer als 20 MiB");
+      const archive=JSON.parse(await f.text());
+      if(!confirm("Wissensarchiv ergänzend importieren?"))return;
+      const result=await api("/api/knowledge/import",archive);
+      alert(result.imported+" Wissenseinträge importiert.");await load();
+    }catch(e){showErr(e);}finally{file.value="";}
+  };
+  d.append(file,button("JSON exportieren",()=>exportKnowledge()),button("Markdown exportieren",()=>exportKnowledge(true)),button("JSON importieren",()=>file.click()));
   d.append(make("h2","Wissensbibliothek"),query,button("Suchen",load),category,content,
     button("Speichern",async()=>{await api(editing===null?"/api/knowledge/add":"/api/knowledge/edit",{id:editing,category:category.value,content:content.value});editing=null;content.value="";await load();}),
     button("Neuer Eintrag",()=>{editing=null;content.value="";}),
