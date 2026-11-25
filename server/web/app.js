@@ -929,6 +929,7 @@ async function openKnowledge() {
   }
   d.append(make("h3","Datensicherung"),backupInfo,backupSelect,
     button("Sicherungen anzeigen",refreshBackups),
+    button("Jetzt sichern",async()=>{await api("/api/knowledge/backup-now",{});await refreshBackups();await load();}),
     button("Wiederherstellen",async()=>{
       if(!backupSelect.value)throw new Error("Bitte eine Sicherung auswählen.");
       if(!confirm("Wissen aus dieser Sicherung ergänzen? Bestehende Einträge bleiben erhalten."))return;
