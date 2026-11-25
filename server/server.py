@@ -1957,6 +1957,30 @@ class Handler(BaseHTTPRequestHandler):
                     else:
                         return self.error("Keine gültige Auswahl")
             return self.send_json({"ok": True, "affected": count})
+        if path == "/api/knowledge/export":
+            from contextlib import closing
+            with closing(knowledge_db()) as db:
+                rows = db.execute("SELECT category,content,created FROM memories ORDER BY id").fetchall()
+            return self.send_json({"ok": True, "format": "bki-knowledge-1", "entries": [dict(zip(("category","content","created"), row)) for row in rows]})
+        if path == "/api/knowledge/import":
+            from contextlib import closing
+            entries = data.get("entries")
+            if data.get("format") != "bki-knowledge-1" or not isinstance(entries,list) or len(entries)>10000:
+                return self.error("Ungültiges Wissensarchiv")
+            rows = []
+            for entry in entries:
+                if not isinstance(entry,dict):
+                    return self.error("Ungültiger Wissenseintrag")
+                category, content = entry.get("category"), entry.get("content")
+                if not isinstance(category,str) or not isinstance(content,str) or not content.strip() or len(category)>100 or len(content)>32000:
+                    return self.error("Ungültiger Wissenseintrag")
+                rows.append((category,content.strip(),time.time()))
+            require_storage(DATA_DIR, 262144 + sum(len(c.encode("utf-8"))+len(t.encode("utf-8")) for c,t,_ in rows)*4)
+            with closing(knowledge_db()) as db, db:
+                db.executemany("INSERT INTO memories(category,content,created) SELECT ?,?,? WHERE NOT EXISTS (SELECT 1 FROM memories WHERE category=? AND content=?)",
+                               [(c,t,ts,c,t) for c,t,ts in rows])
+                count = db.total_changes
+            return self.send_json({"ok": True, "imported": count})
         if path == "/api/knowledge/add":
             try:
                 return self.send_json({"ok": True, "id": knowledge_add(data.get("category", "Allgemein"), data.get("content"))})
