@@ -431,12 +431,13 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
   SchreibeLF (Join-Path $usb "autoinstall.yaml") ([IO.File]::ReadAllText((Join-Path $src "installer\autoinstall.yaml"), $utf8))
   function Q($s) { "'" + ($s -replace "'", "'\''") + "'" }
   $ids = ($c.Models | Where-Object { $_.id -notlike "custom*" } | ForEach-Object { $_.id }) -join ","
-  $cfg = "# Butchies KI Studio – Einstellungen für die Installation`n# Das Passwort wird nach der Installation automatisch vom Stick gelöscht.`n" +
+  $cfg = "# Butchies KI Studio – Einstellungen für die Installation`n# Persönliche Anmeldung wird erst im Browser eingerichtet.`n" +
          "BKI_HOSTNAME=$(Q $c.Host)`n" +
          "BKI_MODELS=$(Q $ids)`nBKI_CUSTOM_MODELS=$(Q ($c.Custom -join ' '))`nBKI_EXTENSIONS=$(Q ($c.Extensions -join ','))`n"
   SchreibeLF (Join-Path $payload "config.env") $cfg
   $c.Password = $null
   SchreibeLF (Join-Path $payload "VERSION") ((Get-Content (Join-Path $src "VERSION") -Raw).Trim())
+  SchreibeLF (Join-Path $payload "modelle.json") ([IO.File]::ReadAllText((Join-Path $src "modelle.json"), $utf8))
   SchreibeLF (Join-Path $payload "iso.txt") $c.IsoName
   Row bki ok "Automatische Installation einbauen" "Butchies $((Get-Content (Join-Path $src 'VERSION') -Raw).Trim()) · $($c.Host)"; Pct 78
   # --- KI-Modelle auf den Stick
@@ -462,7 +463,7 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
   Row chk spin "Abschlussprüfung" "jede Datei auf dem Stick wird nachgelesen"
   $bad = 0
   foreach ($f in (Get-ChildItem (Join-Path $usb "butchies") -Recurse -File)) { try { [void][IO.File]::ReadAllBytes($f.FullName) } catch { $bad++ } }
-  foreach ($must in "autoinstall.yaml", "boot\grub\grub.cfg", "casper\vmlinuz", "butchies\installer\early.sh", "butchies\config.env") { if (-not (Test-Path (Join-Path $usb $must))) { $bad++ } }
+  foreach ($must in "autoinstall.yaml", "boot\grub\grub.cfg", "casper\vmlinuz", "butchies\installer\early.sh", "butchies\config.env", "butchies\VERSION", "butchies\modelle.json", "butchies\installer\late.sh", "butchies\server\server.py", "butchies\server\systemd\butchies-ki.service") { if (-not (Test-Path (Join-Path $usb $must))) { $bad++ } }
   if ($bad -gt 0) { Row chk bad "Abschlussprüfung" "$bad Datei(en) fehlerhaft"; throw "Abschlussprüfung fehlgeschlagen" }
   Row chk ok "Abschlussprüfung" "alle Dateien in Ordnung"
   Row cache spin "Cache bereinigen" "Temporäre Installationsdownloads entfernen"
