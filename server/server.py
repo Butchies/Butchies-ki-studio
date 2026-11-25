@@ -100,6 +100,7 @@ DEFAULT_CONFIG = {
     "threads": 0,           # 0 = automatisch (physische Kerne)
     "backend": "vulkan",    # "vulkan" oder "cpu"
     "active_model": "",     # Dateiname in MODEL_DIR
+    "ui_username": None,
     "ui_password": None,    # {"salt": "...", "hash": "..."}
 }
 
@@ -1539,13 +1540,17 @@ class Handler(BaseHTTPRequestHandler):
             pw = str(data.get("password", ""))
             if len(pw) < 8:
                 return self.error("Das Passwort braucht mindestens 8 Zeichen")
+            username = str(data.get("username", "")).strip()
+            if not username or len(username) > 64:
+                return self.error("Bitte gültigen Benutzernamen eingeben")
+            CONFIG["ui_username"] = username
             CONFIG["ui_password"] = hash_password(pw)
             save_config(CONFIG)
             log("Passwort für die Oberfläche festgelegt")
             return self.send_json({"ok": True}, extra_headers=self.new_session_header())
         if path == "/api/login":
             time.sleep(0.5)  # bremst Raten
-            if check_password(str(data.get("password", ""))):
+            if (not CONFIG.get("ui_username") or str(data.get("username", "")).strip() == CONFIG["ui_username"]) and check_password(str(data.get("password", ""))):
                 ACTIVITY.touch()
                 return self.send_json({"ok": True}, extra_headers=self.new_session_header())
             return self.error("Falsches Passwort", 401)
