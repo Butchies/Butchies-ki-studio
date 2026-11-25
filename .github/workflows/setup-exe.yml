@@ -45,7 +45,8 @@ jobs:
         shell: powershell
         run: |
           Import-Module ps2exe
-          $v = (Get-Content VERSION -Raw).Trim() + ".0"
+          $v = (Get-Content VERSION -Raw).Trim()
+          if ($v.Split(".").Count -eq 3) { $v += ".0" }
           Invoke-ps2exe -inputFile "$env:RUNNER_TEMP\Setup-komplett.ps1" -outputFile Butchies-KI-Setup.exe -noConsole -requireAdmin -iconFile windows\logo.ico `
             -title "Butchies KI Studio Setup" -product "Butchies KI Studio" -company "Butchies" -version $v
       - uses: actions/upload-artifact@v4
@@ -53,6 +54,7 @@ jobs:
           name: Butchies-KI-Setup
           path: Butchies-KI-Setup.exe
       - name: Setup.exe ins Repo legen (download/)
+        if: github.ref == 'refs/heads/main'
         shell: powershell
         run: |
           New-Item -ItemType Directory -Force -Path download | Out-Null
