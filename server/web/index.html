@@ -48,7 +48,10 @@
     <div class="job-head"><strong id="job-name"></strong><span id="job-percent" class="job-percent"></span></div>
     <div class="blocks" id="job-blocks" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div>
     <div class="job-text muted" id="job-text"></div>
-    <button class="btn ghost small" id="job-clear" type="button" hidden>Schließen</button>
+    <div class="btn-row" id="job-actions" hidden>
+      <button class="btn ghost small" id="job-clear" type="button">Schließen</button>
+      <a class="btn primary small console-link" href="butchies-ki-ssh:">Linux-Konsole öffnen</a>
+    </div>
   </div>
 
   <div class="layout">
@@ -251,7 +254,8 @@
       <section id="connection-panel" class="card form" hidden>
         <h2>Verbindung</h2>
         <p>Studio-Adresse: <code id="connection-host">butchies-ki</code></p>
-        <p class="muted">Die Taskleisten-App verwendet den eingetragenen Servernamen oder die IP-Adresse. Die Linux-Konsole öffnest du im Rechtsklickmenü der Windows-Taskleiste.</p>
+        <a class="btn primary console-link" href="butchies-ki-ssh:">Linux-Konsole öffnen</a>
+        <p class="muted">Auf Windows öffnet die installierte Taskleisten-App eine SSH-Konsole für den hinterlegten Server.</p>
       </section>
       <form id="pw-form" class="card form">
         <h2>Passwort ändern</h2>

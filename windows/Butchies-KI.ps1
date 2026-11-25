@@ -8,7 +8,7 @@
   * Weckseite http://localhost:8765 (Desktop-Verknüpfung "Butchies KI")
   * Das Abfragen des Status hält den Mini-PC NICHT wach.
 #>
-param([string]$MiniPC = "", [switch]$OpenOnStart)
+param([string]$MiniPC = "", [switch]$OpenOnStart, [switch]$ConsoleOnly)
 
 $ErrorActionPreference = "Continue"
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing, PresentationFramework, PresentationCore, WindowsBase, WindowsFormsIntegration
@@ -40,6 +40,32 @@ function SpeicherePasswort($pw) {
   if ($pw) { ConvertTo-SecureString $pw -AsPlainText -Force | ConvertFrom-SecureString | Set-Content $pwFile }
   elseif (Test-Path $pwFile) { Remove-Item $pwFile -Force }
 }
+
+function OeffneLinuxKonsole {
+  $target = $cfg.host
+  if ($target -notmatch '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$') {
+    [Windows.Forms.MessageBox]::Show("Bitte in den Einstellungen einen gültigen Servernamen oder eine IPv4-Adresse hinterlegen.", "Linux-Konsole") | Out-Null
+    return
+  }
+  $ssh = Get-Command ssh.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $ssh) {
+    [Windows.Forms.MessageBox]::Show("Aktiviere unter Windows den OpenSSH-Client in den optionalen Features.", "Linux-Konsole") | Out-Null
+    return
+  }
+  Add-Type -AssemblyName Microsoft.VisualBasic
+  $user = [Microsoft.VisualBasic.Interaction]::InputBox("Linux-Benutzername für $target", "Linux-Konsole (SSH)", "butchies").Trim()
+  if (-not $user) { return }
+  if ($user -cnotmatch '^[a-z_][a-z0-9_-]{0,31}$') {
+    [Windows.Forms.MessageBox]::Show("Ungültiger Linux-Benutzername.", "Linux-Konsole") | Out-Null
+    return
+  }
+  $sshPath = $ssh.Source.Replace("'", "''")
+  $command = "& '$sshPath' -l '$user' -- '$target'"
+  $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+  Start-Process -FilePath (Join-Path $PSHOME "powershell.exe") -ArgumentList "-NoProfile", "-NoExit", "-EncodedCommand", $encoded
+}
+
+if ($ConsoleOnly) { OeffneLinuxKonsole; return }
 
 # --- Gemeinsamer Zustand mit dem Hintergrund-Thread -----------------------------
 $sync = [hashtable]::Synchronized(@{
@@ -475,30 +501,6 @@ function AutostartSetzen([bool]$an) {
     $l.Arguments = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     $l.WindowStyle = 7; $l.Save()
   } elseif (Test-Path $startupLnk) { Remove-Item $startupLnk -Force }
-}
-
-function OeffneLinuxKonsole {
-  $target = $sync.Host
-  if ($target -notmatch '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$') {
-    [Windows.Forms.MessageBox]::Show("Bitte in den Einstellungen einen gültigen Servernamen oder eine IPv4-Adresse hinterlegen.", "Linux-Konsole") | Out-Null
-    return
-  }
-  $ssh = Get-Command ssh.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if (-not $ssh) {
-    [Windows.Forms.MessageBox]::Show("Aktiviere unter Windows den OpenSSH-Client in den optionalen Features.", "Linux-Konsole") | Out-Null
-    return
-  }
-  Add-Type -AssemblyName Microsoft.VisualBasic
-  $user = [Microsoft.VisualBasic.Interaction]::InputBox("Linux-Benutzername für $target", "Linux-Konsole (SSH)", "butchies").Trim()
-  if (-not $user) { return }
-  if ($user -cnotmatch '^[a-z_][a-z0-9_-]{0,31}$') {
-    [Windows.Forms.MessageBox]::Show("Ungültiger Linux-Benutzername.", "Linux-Konsole") | Out-Null
-    return
-  }
-  $sshPath = $ssh.Source.Replace("'", "''")
-  $command = "& '$sshPath' -l '$user' -- '$target'"
-  $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
-  Start-Process -FilePath (Join-Path $PSHOME "powershell.exe") -ArgumentList "-NoProfile", "-NoExit", "-EncodedCommand", $encoded
 }
 
 function Beenden {

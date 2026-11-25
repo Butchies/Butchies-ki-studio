@@ -198,3 +198,5 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .chat-workspace summary { cursor: pointer; color: var(--accent); }
 .chat-workspace fieldset { border: 1px solid var(--line); max-height: 9rem; overflow: auto; }
 .chat-workspace fieldset label { display: block; }
+
+.console-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }

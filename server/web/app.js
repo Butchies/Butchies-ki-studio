@@ -133,7 +133,7 @@ function renderJob(job) {
   $("job-percent").textContent = job.percent + " %";
   $("job-text").textContent = job.error || job.text;
   b.classList.toggle("failed", !!job.error);
-  $("job-clear").hidden = !job.error;
+  $("job-actions").hidden = !job.error;
   $("job-clear").textContent = job.name === "Ersteinrichtung" ? "Jetzt erneut versuchen" : "Schließen";
   blocks($("job-blocks"), job.percent);
 }
