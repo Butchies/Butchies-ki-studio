@@ -514,20 +514,32 @@ def llama_version():
     return read_file(os.path.join(LLAMA_DIR, "current", ".version"), "")
 
 
+LLAMA_RELEASES = "https://api.github.com/repos/ggml-org/llama.cpp/releases"
+
+
+def llama_release_asset(backend):
+    platform = "ubuntu-vulkan-x64" if backend == "vulkan" else "ubuntu-x64"
+    latest = http_json(LLAMA_RELEASES + "/latest")
+    for page in range(3):
+        releases = [latest] if page == 0 else http_json(
+            LLAMA_RELEASES + "?per_page=30&page=%d" % page)
+        for release in releases:
+            tag = release.get("tag_name", "")
+            if not re.fullmatch(r"b[0-9]+", tag) or release.get("draft") or release.get("prerelease"):
+                continue
+            stem = "llama-%s-bin-%s" % (tag, platform)
+            for asset in release.get("assets", []):
+                if asset.get("name") in (stem + ".tar.gz", stem + ".zip") and asset.get("browser_download_url"):
+                    return tag, asset
+        if page and len(releases) < 30:
+            break
+    raise RuntimeError("Kein stabiles llama.cpp-Paket für %s gefunden" % platform)
+
+
 def install_llama(p_from=0, p_to=100):
     backend = CONFIG.get("backend", "vulkan")
-    want = "bin-ubuntu-vulkan-x64" if backend == "vulkan" else "bin-ubuntu-x64"
     JOB.progress(p_from, "Suche neueste KI-Laufzeit (llama.cpp, %s) …" % backend)
-    rel = http_json("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest")
-    tag = rel.get("tag_name", "unbekannt")
-    asset = None
-    for a in rel.get("assets", []):
-        n = a.get("name", "")
-        if want in n and (n.endswith(".tar.gz") or n.endswith(".zip")):
-            asset = a
-            break
-    if not asset:
-        raise RuntimeError("Keine passende llama.cpp-Datei (%s) im Release %s gefunden" % (want, tag))
+    tag, asset = llama_release_asset(backend)
     os.makedirs(LLAMA_DIR, exist_ok=True)
     archive = os.path.join(LLAMA_DIR, asset["name"])
     span = p_to - p_from
@@ -1281,7 +1293,7 @@ def check_updates():
     except Exception as e:  # noqa: BLE001
         err.append("Modell-Katalog: %s" % e)
     try:
-        UPDATE_INFO["llama_latest"] = http_json("https://api.github.com/repos/ggml-org/llama.cpp/releases/latest").get("tag_name", "")
+        UPDATE_INFO["llama_latest"], _ = llama_release_asset(CONFIG.get("backend", "vulkan"))
     except Exception as e:  # noqa: BLE001
         err.append("llama.cpp: %s" % e)
     repo = CONFIG.get("update_repo") or "Butchies/Butchies-ki-studio"
