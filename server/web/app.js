@@ -208,49 +208,86 @@ async function pollStatus() {
 // ---------------------------------------------------------------- Markdown (klein)
 function esc(t) { return t.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function inline(t) {
-  return esc(t)
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  return esc(t).split(/(`[^`\n]+`)/g).map((part, i) => i % 2
+    ? "<code>" + part.slice(1, -1) + "</code>"
+    : part.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*([^*]+)\*/g, "<em>$1</em>")).join("");
 }
 function renderMarkdown(src, el) {
-  el.innerHTML = "";
-  const parts = src.split(/```/);
-  parts.forEach((part, i) => {
-    if (i % 2 === 1) {
-      const nl = part.indexOf("\n");
-      const lang = nl >= 0 ? part.slice(0, nl).trim() : "";
-      const code = nl >= 0 ? part.slice(nl + 1) : part;
-      const box = document.createElement("div"); box.className = "codebox";
-      const head = document.createElement("div"); head.className = "codebox-head";
-      const l = document.createElement("span"); l.textContent = lang || "Code";
-      const btn = document.createElement("button"); btn.type = "button"; btn.className = "btn ghost small"; btn.textContent = "Kopieren";
-      btn.addEventListener("click", () => copyText(code.replace(/\n$/, ""), btn));
-      head.append(l, btn);
-      const pre = document.createElement("pre"); const c = document.createElement("code"); c.textContent = code.replace(/\n$/, "");
-      pre.appendChild(c); box.append(head, pre); el.appendChild(box);
-      return;
-    }
-    const blocks = part.split(/\n{2,}/);
-    blocks.forEach((b) => {
-      if (!b.trim()) return;
-      const lines = b.split("\n");
-      if (lines.every((x) => /^\s*([-*]|\d+\.)\s+/.test(x) || !x.trim())) {
-        const ordered = /^\s*\d+\./.test(lines[0]);
-        const list = document.createElement(ordered ? "ol" : "ul");
-        lines.filter((x) => x.trim()).forEach((x) => {
-          const li = document.createElement("li"); li.innerHTML = inline(x.replace(/^\s*([-*]|\d+\.)\s+/, "")); list.appendChild(li);
-        });
-        el.appendChild(list);
-      } else if (/^#{1,4}\s/.test(b)) {
-        const h = document.createElement("p"); h.innerHTML = "<strong>" + inline(b.replace(/^#{1,4}\s/, "")) + "</strong>"; el.appendChild(h);
-      } else {
-        const p = document.createElement("p"); p.innerHTML = inline(b).replace(/\n/g, "<br>"); el.appendChild(p);
+  el.replaceChildren();
+  const lines = src.replace(/\r\n/g, "\n").split("\n");
+  const heading = /^(#{1,6})\s+(.+)$/;
+  const listItem = /^\s*([-+*]|\d+[.)])\s+(.+)$/;
+  const fence = /^ {0,3}```\s*([^\s`]*)\s*$/;
+  const quote = /^> ?/;
+  const cells = (line) => line.trim().replace(/^\||\|$/g, "").split("|").map((cell) => cell.trim());
+  const isTable = (i) => lines[i]?.includes("|") && lines[i + 1]?.includes("|")
+    && cells(lines[i]).length === cells(lines[i + 1]).length
+    && cells(lines[i + 1]).every((cell) => /^:?-{3,}:?$/.test(cell));
+  const add = (tag, value, target = el) => {
+    const node = document.createElement(tag);
+    node.innerHTML = inline(value);
+    target.appendChild(node);
+    return node;
+  };
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i++];
+    if (!line.trim()) continue;
+    const codeStart = line.match(fence);
+    const title = line.match(heading);
+    const item = line.match(listItem);
+    if (codeStart) {
+      const code = [];
+      while (i < lines.length && !/^ {0,3}```\s*$/.test(lines[i])) code.push(lines[i++]);
+      if (i < lines.length) i++;
+      const box = add("div", ""); box.className = "codebox";
+      const head = add("div", "", box); head.className = "codebox-head";
+      add("span", codeStart[1] || "Code", head);
+      const btn = add("button", "Kopieren", head); btn.type = "button"; btn.className = "btn ghost small";
+      const value = code.join("\n");
+      btn.addEventListener("click", () => copyText(value, btn));
+      add("code", "", add("pre", "", box)).textContent = value;
+    } else if (title) {
+      add("h" + Math.min(6, title[1].length + 1), title[2]);
+    } else if (isTable(i - 1)) {
+      const columns = cells(line);
+      const alignments = cells(lines[i++]).map((cell) => cell.endsWith(":") ? (cell.startsWith(":") ? "center" : "right") : "left");
+      const wrap = add("div", ""); wrap.className = "answer-table";
+      const table = add("table", "", wrap);
+      const row = add("tr", "", add("thead", "", table));
+      columns.forEach((cell, j) => {
+        const th = add("th", cell, row); th.scope = "col"; th.style.textAlign = alignments[j];
+      });
+      const body = add("tbody", "", table);
+      while (i < lines.length && lines[i].includes("|") && cells(lines[i]).length === columns.length) {
+        const row = add("tr", "", body);
+        cells(lines[i++]).forEach((cell, j) => { add("td", cell, row).style.textAlign = alignments[j]; });
       }
-    });
-  });
+    } else if (item) {
+      const ordered = /^\d/.test(item[1]);
+      const list = add(ordered ? "ol" : "ul", "");
+      if (ordered) list.start = parseInt(item[1], 10);
+      add("li", item[2], list);
+      while (i < lines.length) {
+        const next = lines[i].match(listItem);
+        if (!next || /^\d/.test(next[1]) !== ordered) break;
+        add("li", next[2], list); i++;
+      }
+    } else if (quote.test(line)) {
+      const block = add("blockquote", "");
+      add("p", line.replace(quote, ""), block);
+      while (i < lines.length && quote.test(lines[i])) add("p", lines[i++].replace(quote, ""), block);
+    } else {
+      const paragraph = [line];
+      while (i < lines.length && lines[i].trim() && !heading.test(lines[i]) && !listItem.test(lines[i])
+             && !fence.test(lines[i]) && !quote.test(lines[i]) && !isTable(i)) paragraph.push(lines[i++]);
+      const node = add("p", "");
+      node.innerHTML = paragraph.map(inline).join("<br>");
+    }
+  }
 }
-function copyText(text, btn) {
-  const done = () => { btn.textContent = "Kopiert ✓"; setTimeout(() => (btn.textContent = "Kopieren"), 1500); };
+function copyText(text, btn, label = "Kopieren") {
+  const done = () => { btn.textContent = "Kopiert ✓"; setTimeout(() => (btn.textContent = label), 1500); };
   if (navigator.clipboard && window.isSecureContext) {
     navigator.clipboard.writeText(text).then(done).catch(() => fallbackCopy(text, done));
   } else fallbackCopy(text, done);
@@ -302,12 +339,16 @@ function messageEl(m) {
     d.appendChild(document.createTextNode(m.content));
   } else {
     if (m.think) { const t = document.createElement("details"); const s = document.createElement("summary"); s.textContent = "Gedanken der KI"; const p = document.createElement("div"); p.className = "think"; p.textContent = m.think; t.append(s, p); d.appendChild(t); }
-    const body = document.createElement("div"); body.className = "msg bot"; renderMarkdown(m.content || "", body); d.appendChild(body);
-    if (state.ext && state.ext.tts && m.content && !state.streaming) {
+    const body = document.createElement("div"); body.className = "answer-content"; renderMarkdown(m.content || "", body); d.appendChild(body);
+    if (m.content && !state.streaming) {
       const tools = document.createElement("div"); tools.className = "bot-tools";
-      const b = document.createElement("button"); b.type = "button"; b.className = "btn small"; b.textContent = "Vorlesen";
-      b.addEventListener("click", () => speak(m.content, b));
-      tools.appendChild(b); d.appendChild(tools);
+      const copy = button("Antwort kopieren", "small", () => copyText(m.content, copy, "Antwort kopieren"));
+      tools.appendChild(copy);
+      if (state.ext?.tts) {
+        const read = button("Vorlesen", "small", () => speak(m.content, read));
+        tools.appendChild(read);
+      }
+      d.appendChild(tools);
     }
   }
   return d;
