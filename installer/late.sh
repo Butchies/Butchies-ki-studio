@@ -32,20 +32,11 @@ cp -r "$B/server/." "$T/opt/butchies-ki/"
 chmod 755 "$T/opt/butchies-ki/server.py" "$T/opt/butchies-ki/wol-enable.sh"
 cp "$B/server/systemd/"*.service "$B/server/systemd/"*.timer "$T/etc/systemd/system/"
 
-# Linux- und Web-Anmeldung erhalten dasselbe Installationspasswort.
+# Persönliches Konto wird erst in der Weboberfläche eingerichtet.
 umask 077
-BKI_USERNAME="$BKI_USERNAME" BKI_PASSWORD="${BKI_PASSWORD:?Installationspasswort fehlt}" python3 - "$T/etc/butchies-ki/config.json" <<'PY' || exit 1
-import hashlib, json, os, secrets, sys
-password = os.environ["BKI_PASSWORD"].encode("utf-8")
-salt = secrets.token_hex(16)
-digest = hashlib.pbkdf2_hmac("sha256", password, bytes.fromhex(salt), 200_000).hex()
-with open(sys.argv[1], "w", encoding="utf-8") as f:
-    json.dump({"username": os.environ["BKI_USERNAME"], "sleep_enabled": True,
-               "sleep_minutes": 5, "ui_password": {"salt": salt, "hash": digest}}, f)
-PY
+printf '%s\n' '{"username":"butchies-service","sleep_enabled":true,"sleep_minutes":5}' > "$T/etc/butchies-ki/config.json" || exit 1
 chmod 600 "$T/etc/butchies-ki/config.json" || exit 1
-# Linux-Konto mit demselben Passwort explizit setzen und Fehler nicht verschlucken.
-printf '%s:%s\n' "$BKI_USERNAME" "$BKI_PASSWORD" | in_target chpasswd || exit 1
+in_target passwd -l butchies-service || exit 1
 umask 022
 
 # Im Installer gewählte KI-Modelle und Erweiterungen (lädt der Mini-PC bei der Ersteinrichtung)
@@ -108,6 +99,6 @@ else
   echo "Stick ist schreibgeschützt eingehängt – Protokoll bleibt nur im Speicher"
 fi
 
-status 99 "Fertig! Der Mini-PC startet neu. Danach: http://$BKI_HOSTNAME.local – dort lädt er die KI (ca. 17 GB)." fertig
+status 99 "Fertig! Der Mini-PC startet neu. Danach: http://$BKI_HOSTNAME – dort lädt er die KI (ca. 17 GB)." fertig
 echo "late.sh fertig"
 exit 0
