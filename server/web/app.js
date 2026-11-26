@@ -108,7 +108,54 @@ $("logout-btn").addEventListener("click", async () => {
 
 // ---------------------------------------------------------------- Navigation
 document.querySelectorAll(".nav").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+const sidebar = $("studio-sidebar");
+const sidebarToggle = $("sidebar-toggle");
+let sidebarPinned = false;
+let sidebarTimer;
+function showSidebar(open, restoreFocus = false) {
+  clearTimeout(sidebarTimer);
+  sidebar.classList.toggle("is-open", open);
+  if (!open && (restoreFocus || sidebar.contains(document.activeElement))) sidebarToggle.focus();
+  sidebar.inert = !open;
+  sidebarToggle.setAttribute("aria-expanded", String(open));
+  sidebarToggle.setAttribute("aria-label", open ? "Chatverlauf schließen" : "Chatverlauf öffnen");
+}
+function closeSidebar(restoreFocus = false) {
+  sidebarPinned = false;
+  showSidebar(false, restoreFocus);
+}
+sidebarToggle.addEventListener("click", () => {
+  if (sidebarPinned) closeSidebar(true);
+  else {
+    sidebarPinned = true;
+    showSidebar(true);
+    $("new-chat").focus();
+  }
+});
+$("sidebar-edge").addEventListener("pointerenter", (event) => {
+  if (event.pointerType === "mouse") showSidebar(true);
+});
+function scheduleSidebarClose() {
+  if (!sidebarPinned && !sidebar.contains(document.activeElement)) {
+    clearTimeout(sidebarTimer);
+    sidebarTimer = setTimeout(() => showSidebar(false), 180);
+  }
+}
+$("sidebar-edge").addEventListener("pointerleave", scheduleSidebarClose);
+sidebar.addEventListener("pointerenter", () => clearTimeout(sidebarTimer));
+sidebar.addEventListener("pointerleave", scheduleSidebarClose);
+sidebar.addEventListener("focusout", (event) => {
+  if (!sidebarPinned && !sidebar.matches(":hover") && !sidebar.contains(event.relatedTarget)) showSidebar(false);
+});
+document.addEventListener("pointerdown", (event) => {
+  if (!sidebar.contains(event.target) && !sidebarToggle.contains(event.target)) closeSidebar();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !sidebar.inert) closeSidebar(true);
+});
+
 function setView(v) {
+  closeSidebar();
   state.view = v;
   $("app").dataset.view = v;
   document.querySelectorAll(".nav").forEach((b) => {

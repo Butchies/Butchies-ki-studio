@@ -277,24 +277,8 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .studio-online.connected { color: var(--teal-text); }
 .studio-online.connected::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 7px; border-radius: 50%; background: var(--teal); }
 .studio-server-actions { display: grid; gap: 7px; }
-@media (min-width: 1101px) {
-  .app.chat-home[data-view="chat"] .layout { grid-template-columns: 210px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; }
-  .app.chat-home[data-view="chat"] .sidebar { grid-row: 1 / span 2; }
-  .app.chat-home[data-view="chat"] #view-chat { background: radial-gradient(ellipse at 0% 108%, #d9effe 0 24%, transparent 25%),
-    radial-gradient(ellipse at 100% 110%, #e1f1fc 0 30%, transparent 31%), #f2f8fe; }
-  .app.chat-home[data-view="chat"] .statuspanel { display: flex; flex-direction: row; align-items: center; flex-wrap: wrap;
-    grid-column: 2; grid-row: 2; width: min(calc(100% - 36px), 920px); margin: 0 auto 14px; padding: 12px;
-    border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); }
-  .app.chat-home[data-view="chat"] .statuspanel .meter { flex: 1; min-width: 95px; }
-  .app.chat-home[data-view="chat"] .statuspanel :is(.tiles, #p-sleep, .studio-server-actions) { display: none; }
-}
-@media (max-width: 1100px) { .layout { grid-template-columns: 175px minmax(0, 1fr); } .statuspanel { display: none; } }
 @media (max-width: 720px) {
-  .layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
-  .sidebar { flex-direction: row; align-items: center; padding: 6px 10px; }
-  .sidebar #new-chat { width: auto; height: 34px; margin: 0; }
-  .studio-tools { display: flex; margin: 0; padding: 0; }
-  .studio-tools [data-view="models"], .studio-tools [data-view="settings"], .studio-host { display: none; }
+  .studio-host { display: none; }
   .studio-shortcuts { grid-template-columns: 1fr 1fr; }
   .studio-welcome { padding: 14px; }
   .composer { width: calc(100% - 16px); margin-bottom: 8px; }
@@ -317,3 +301,38 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .hub-result p { margin: 5px 0 0; }
 
 .chat-effort { display: inline-flex; align-items: center; gap: 6px; }
+
+
+/* Chatverlauf am Rand und aufklappbarer Serverstatus */
+.topbar { justify-content: flex-start; }
+.topbar-right { margin-inline-start: auto; }
+.topbar .sidebar-toggle { flex: none; width: 36px; height: 36px; padding: 0; font-size: 19px;
+  color: white; background: transparent; border-color: #ffffff60; }
+.topbar .sidebar-toggle:hover { background: #0878c7; }
+.layout { position: relative; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); }
+.layout > .view { grid-area: 1 / 1; }
+.sidebar-edge { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-edge { display: block; position: absolute; z-index: 3; inset: 0 auto 0 0; width: 9px; }
+}
+.layout > .sidebar { position: absolute; z-index: 4; inset: 0 auto 0 0; width: min(272px, 90vw);
+  background: var(--side); flex-direction: column; flex-wrap: nowrap; align-items: stretch; padding: 15px 12px;
+  transform: translateX(-100%); visibility: hidden;
+  transition: transform .18s ease, visibility 0s linear .18s; }
+.layout > .sidebar.is-open { transform: translateX(0); visibility: visible;
+  box-shadow: 8px 0 24px #143d6426; transition-delay: 0s; }
+.sidebar .history, .sidebar .side-title { display: flex; }
+.sidebar .history { overflow: auto; min-height: 0; }
+.sidebar #new-chat { flex: none; width: 100%; }
+.status-drawer { flex: none; border-top: 1px solid var(--line); background: var(--panel); }
+.status-drawer summary { display: flex; align-items: center; justify-content: flex-end; gap: 12px;
+  padding: 6px 18px; cursor: pointer; font-size: 12px; color: var(--muted); list-style: none; }
+.status-drawer summary::-webkit-details-marker { display: none; }
+.status-drawer summary::after { content: "▲"; font-size: 9px; }
+.status-drawer[open] summary::after { content: "▼"; }
+.status-drawer .statuspanel { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 12px 20px; max-height: 30vh; background: var(--panel); border: 0; padding: 8px 18px 14px; }
+.status-drawer .statuspanel :is(.tiles, .studio-server-actions) { grid-column: 1 / -1; }
+.status-drawer .studio-server-actions { display: flex; flex-wrap: wrap; }
+.status-drawer #p-sleep { grid-column: 1 / -1; margin: 0; }
+@media (prefers-reduced-motion: reduce) { .layout > .sidebar { transition: none; } }

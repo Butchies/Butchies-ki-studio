@@ -37,6 +37,7 @@
 
 <div id="app" class="app" hidden>
   <header class="topbar">
+    <button id="sidebar-toggle" class="btn sidebar-toggle" type="button" aria-label="Chatverlauf öffnen" aria-controls="studio-sidebar" aria-expanded="false">☰</button>
     <div class="brand"><span class="logo" aria-hidden="true"></span>Butchies KI Studio 5.0</div>
     <nav class="studio-nav" aria-label="Hauptmenü">
       <button class="nav active" data-view="chat" type="button">Chat</button>
@@ -65,7 +66,8 @@
   </div>
 
   <div class="layout">
-    <nav class="sidebar" aria-label="Chatverlauf und Werkzeuge">
+    <div id="sidebar-edge" class="sidebar-edge" aria-hidden="true"></div>
+    <nav id="studio-sidebar" class="sidebar" aria-label="Chatverlauf und Werkzeuge" inert>
       <button class="btn primary" id="new-chat" type="button">＋ Neuer Chat</button>
       <div class="side-title">Chatverlauf</div>
       <div id="history" class="history"></div>
@@ -403,9 +405,10 @@
       </form>
     </main>
 
-    <aside class="statuspanel" aria-label="Systemstatus">
-      <h2>Serverstatus</h2>
-      <p id="studio-online" class="studio-online" role="status">Verbindung wird geprüft</p>
+  </div>
+  <details class="status-drawer">
+    <summary><span>Serverstatus</span><span id="studio-online" class="studio-online" role="status">Verbindung wird geprüft</span></summary>
+    <div class="statuspanel">
       <div class="meter"><div class="meter-head"><span>Arbeitsspeicher</span><span id="p-ram"></span></div><div class="bar"><div id="pb-ram" class="fill teal"></div></div></div>
       <div class="meter"><div class="meter-head"><span>Prozessor</span><span id="p-cpu"></span></div><div class="bar"><div id="pb-cpu" class="fill"></div></div></div>
       <div class="meter"><div class="meter-head"><span>SSD</span><span id="p-disk">–</span></div><div class="bar"><div id="pb-disk" class="fill teal"></div></div></div>
@@ -419,8 +422,8 @@
         <button class="btn" type="button" data-sys="reboot">Server neu starten</button>
         <button class="btn" type="button" data-sys="shutdown">Server herunterfahren</button>
       </div>
-    </aside>
-  </div>
+    </div>
+  </details>
 </div>
 
 <script src="/app.js"></script>
