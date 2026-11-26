@@ -315,3 +315,5 @@ details summary{cursor:pointer;color:var(--soft);margin:8px 0}
 .hub-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 12px; }
 .hub-result a { font-weight: 650; overflow-wrap: anywhere; }
 .hub-result p { margin: 5px 0 0; }
+
+.chat-effort { display: inline-flex; align-items: center; gap: 6px; }

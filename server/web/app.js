@@ -187,6 +187,7 @@ function setBar(id, frac) { $(id).style.width = Math.round(Math.max(0, Math.min(
 
 function renderStatus(s) {
   state.status = s;
+  $("chat-effort-wrap").hidden = s.reasoning_levels?.length !== 3;
   $("chat-web-panel").hidden = !s.web_search_available;
   renderJob(s.job);
   const pill = $("llama-pill");
@@ -368,6 +369,7 @@ function currentChat() { return state.chats.find((c) => c.id === state.current);
 
 function newChat() {
   state.current = null;
+  $("chat-effort").value = "medium";
   setView("chat");
   renderMessages(); renderHistory();
   $("input").focus();
@@ -390,7 +392,7 @@ function renderHistory() {
     }
     const row = document.createElement("div"); row.className = "hist" + (c.id === state.current ? " active" : "");
     const open = document.createElement("button"); open.type = "button"; open.className = "open"; open.textContent = c.title;
-    open.addEventListener("click", () => { state.current = c.id; setView("chat"); renderMessages(); renderHistory(); });
+    open.addEventListener("click", () => { state.current = c.id; $("chat-effort").value = c.reasoningEffort || "medium"; setView("chat"); renderMessages(); renderHistory(); });
     const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×";
     del.setAttribute("aria-label", "Chat löschen: " + c.title);
     del.addEventListener("click", () => {
@@ -473,6 +475,10 @@ function renderMessages() {
   box.scrollTop = box.scrollHeight;
 }
 
+$("chat-effort").addEventListener("change", () => {
+  const chat = currentChat();
+  if (chat) { chat.reasoningEffort = $("chat-effort").value; saveChats(); }
+});
 $("focus-chat").addEventListener("click", () => $("input").focus());
 $("studio-host").textContent = location.origin;
 
@@ -528,6 +534,7 @@ $("composer").addEventListener("submit", async (e) => {
     c = { id: Date.now().toString(36), title: (text || "Bild").slice(0, 40).replace(/\s+/g, " "), messages: [] };
     state.chats.unshift(c); state.current = c.id;
   }
+  c.reasoningEffort = $("chat-effort").value;
   c.workspace = {
     bot: $("chat-bot").value,
     memory: selectedSources("memory"),
@@ -549,7 +556,7 @@ $("composer").addEventListener("submit", async (e) => {
   try {
     const r = await fetch("/api/chat", {
       method: "POST", headers: { "Content-Type": "application/json" }, signal: ctrl.signal,
-      body: JSON.stringify({ ...c.workspace, web_query: webQuery, messages: c.messages.slice(0, -1).map((m) => (m.images ? { role: m.role, content: m.content, images: m.images } : { role: m.role, content: m.content })) }),
+      body: JSON.stringify({ ...c.workspace, reasoning_effort: $("chat-effort-wrap").hidden ? undefined : c.reasoningEffort, web_query: webQuery, messages: c.messages.slice(0, -1).map((m) => (m.images ? { role: m.role, content: m.content, images: m.images } : { role: m.role, content: m.content })) }),
     });
     if (!r.ok) { let d = {}; try { d = await r.json(); } catch (x) { /* */ } throw new Error(d.error || "Fehler " + r.status); }
     if (webQuery === $("chat-web-query").value.trim()) $("chat-web-query").value = "";

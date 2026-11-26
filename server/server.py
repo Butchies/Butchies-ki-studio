@@ -42,9 +42,10 @@ import urllib.parse
 import urllib.request
 import zipfile
 from collections import deque
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.21"
+VERSION = "0.4.22"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -111,8 +112,12 @@ DEFAULT_CONFIG = {
 
 SYSTEM_PROMPT = (
     "Du bist Butchies KI, ein hilfsbereiter Assistent fürs Programmieren und Erklären. "
-    "Du läufst komplett offline auf einem Mini-PC im Heimnetz. Antworte auf Deutsch, "
-    "klar und einfach. Code immer in Markdown-Codeblöcken mit Sprachangabe. "
+    "Das Modell läuft lokal auf einem Mini-PC im Heimnetz. Verstehe deutsche Fragen und "
+    "antworte standardmäßig in natürlichem, klarem Deutsch, auch bei englischen Quellen. "
+    "Wenn der Benutzer ausdrücklich eine andere Sprache verlangt, etwa für eine Übersetzung "
+    "oder einen Songtext, verfasse den gewünschten Inhalt in dieser Sprache. "
+    "Code, Befehle, Dateinamen und technische Bezeichner unverändert lassen. "
+    "Code immer in Markdown-Codeblöcken mit Sprachangabe. "
     "Wenn du etwas nicht sicher weißt, sag das ehrlich."
 )
 
@@ -1808,6 +1813,65 @@ STATIC = {
 }
 
 
+REASONING_LEVELS = ("low", "medium", "high")
+
+
+def reasoning_fields(method, level):
+    if method == "top":
+        return {"reasoning_effort": level}
+    if method == "template":
+        return {"chat_template_kwargs": {"reasoning_effort": level}}
+    return {}
+
+
+@lru_cache(maxsize=8)
+def probe_reasoning(port, process_id, model):
+    """Prüft ohne Textgenerierung, ob die laufende Chat-Vorlage alle Stufen unterscheidet."""
+    messages = [{"role": "user", "content": "Hallo"}]
+    baseline = None
+    for method in ("top", "template"):
+        prompts = set()
+        failed = False
+        for level in (None, *REASONING_LEVELS):
+            if level is None and baseline is not None:
+                continue
+            payload = {"messages": messages}
+            if level:
+                payload.update(reasoning_fields(method, level))
+            conn = http.client.HTTPConnection("127.0.0.1", port, timeout=2)
+            try:
+                conn.request("POST", "/apply-template", body=json.dumps(payload),
+                             headers={"Content-Type": "application/json"})
+                response = conn.getresponse()
+                if response.status != 200:
+                    failed = True
+                    break
+                prompt = json.loads(response.read(128 * 1024)).get("prompt")
+                if not isinstance(prompt, str) or not prompt:
+                    failed = True
+                    break
+                if level is None:
+                    baseline = prompt
+                else:
+                    prompts.add(prompt)
+            except (OSError, http.client.HTTPException, ValueError, AttributeError):
+                return ""
+            finally:
+                conn.close()
+        if not failed and len(prompts) == len(REASONING_LEVELS):
+            return method
+    return ""
+
+
+def active_reasoning_method():
+    process = LLAMA.proc
+    model = LLAMA.model or ""
+    if (LLAMA.state != "bereit" or not process or
+            not re.search(r"gpt[-_ ]?oss", model, re.IGNORECASE)):
+        return ""
+    return probe_reasoning(LLAMA.port, process.pid, model)
+
+
 HUB_CATEGORIES = {"text-generation", "image-text-to-text", "text-to-image", "image-to-image",
                   "text-to-video", "automatic-speech-recognition", "text-to-speech", "text-to-audio"}
 
@@ -1960,6 +2024,7 @@ class Handler(BaseHTTPRequestHandler):
                 "ext": {e["id"]: ext_installed(e["id"]) for e in EXTENSIONS},
                 "web_search_available": bool(CONFIG.get("web_search_enabled") and CONFIG.get("brave_search_key")),
                 "image_engines": (["local"] if ext_installed("images") else []) + list(CONFIG.get("comfy_profiles", {})),
+                "reasoning_levels": list(REASONING_LEVELS) if active_reasoning_method() else [],
                 "vision": VISION.state,
             })
         if path == "/api/discover":
@@ -2386,6 +2451,9 @@ class Handler(BaseHTTPRequestHandler):
             "temperature": meta.get("temperature", 0.7),
             "top_p": meta.get("top_p", 0.8),
         }
+        effort = data.get("reasoning_effort")
+        if not has_images and effort in REASONING_LEVELS:
+            payload.update(reasoning_fields(active_reasoning_method(), effort))
         with ACTIVITY:
             try:
                 conn = http.client.HTTPConnection("127.0.0.1", engine.port, timeout=900)

@@ -117,6 +117,9 @@
           <button class="btn ghost small" type="button" id="stop-btn" hidden>Stopp</button>
           <label class="sr" for="chat-model">Aktives Modell</label>
           <select id="chat-model" title="Aktives Modell" disabled><option value="">Modell wählen</option></select>
+          <label id="chat-effort-wrap" class="chat-effort" hidden>Denkstufe
+            <select id="chat-effort"><option value="low">Schnell</option><option value="medium" selected>Standard</option><option value="high">Tief</option></select>
+          </label>
           <button class="btn primary" type="submit" id="send-btn">Senden</button>
         </div>
       </form>
