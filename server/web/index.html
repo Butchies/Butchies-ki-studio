@@ -81,79 +81,58 @@
 
     <!-- Chat -->
     <main class="view" id="view-chat">
-      <div class="design-workspace">
-        <section class="design-conversation" aria-label="Unterhaltung">
-          <nav id="design-tools" class="design-tools" aria-label="Studio-Werkzeuge" hidden></nav>
-          <form id="design-command" class="design-command" hidden>
-            <label class="sr" for="design-command-input">Bereich öffnen oder Frage vorbereiten</label>
-            <input id="design-command-input" type="search" list="design-commands" placeholder="Bereich oder Frage eingeben (Strg+K)">
-            <datalist id="design-commands"></datalist>
-            <button class="btn small" type="submit">Öffnen</button>
-          </form>
-          <section class="studio-welcome" id="studio-welcome" hidden>
-            <h1>Willkommen im<br>Butchies KI Studio 5.0</h1>
-            <p>Dein persönlicher KI-Assistent auf dem eigenen Server.</p>
-            <div id="standard-shortcuts" class="studio-shortcuts">
-              <button class="studio-card" type="button" id="focus-chat"><strong>Chatten</strong><span>Mit deinen KI-Modellen</span></button>
-              <button class="studio-card nav" type="button" data-view="models"><strong>Modelle</strong><span>Verwalten und laden</span></button>
-              <button class="studio-card nav" type="button" data-view="system"><strong>Server</strong><span>Überwachen und steuern</span></button>
-              <button class="studio-card nav" type="button" data-view="settings"><strong>Einstellungen</strong><span>Studio anpassen</span></button>
-            </div>
-            <div id="launch-shortcuts" class="studio-shortcuts" hidden>
-              <button id="launch-chat" class="studio-card" type="button"><strong>Chat</strong><span>Fragen stellen</span></button>
-              <button id="launch-work" class="studio-card" type="button"><strong>Work</strong><span>Aufgaben bearbeiten</span></button>
-              <button class="studio-card nav" data-view="models" type="button"><strong>Modelle</strong><span>KI-Modelle wählen</span></button>
-              <button id="launch-library" class="studio-card" type="button"><strong>Bibliothek</strong><span>Material verwalten</span></button>
-            </div>
-          </section>
-          <div id="messages" class="messages" aria-live="polite"></div>
-          <form id="composer" class="composer">
-            <div class="chat-mode">
-              <label for="chat-mode">Modus</label>
-              <select id="chat-mode">
-                <option value="auto">Automatisch</option>
-                <option value="chat">Chat</option>
-                <option value="work">Work · Schritt für Schritt</option>
-              </select>
-            </div>
-            <details class="chat-workspace">
-              <summary>Bot und Quellen</summary>
-              <label for="chat-bot">KI-Bot</label>
-              <select id="chat-bot"><option value="auto">Automatisch</option><option value="">Allgemein</option></select>
-              <div id="chat-sources"></div>
-              <div id="chat-web-panel" hidden>
-                <label for="chat-web-query">Web-Suchbegriff für die nächste Nachricht</label>
-                <input id="chat-web-query" type="search" maxlength="600" autocomplete="off">
-                <p class="muted small">Ein ausgefüllter Suchbegriff wird beim Senden an Brave Search übermittelt.</p>
-              </div>
-              <p class="muted small">Lange Quellen werden an das Kontextfenster angepasst.</p>
-            </details>
-            <label for="input" class="sr">Nachricht</label>
-            <div id="attach-preview" class="attach-preview"></div>
-            <textarea id="input" rows="3" placeholder="Frag etwas … (Enter = senden, Umschalt+Enter = neue Zeile)"></textarea>
-            <div class="composer-row">
-              <button class="btn ghost small" type="button" id="chat-image-create" hidden>Bild erzeugen</button>
-              <button class="btn ghost small" type="button" id="attach-btn">Textdatei einfügen</button>
-              <input type="file" id="attach" hidden accept=".txt,.py,.js,.ts,.json,.md,.html,.css,.ps1,.bat,.sh,.cs,.cpp,.c,.h,.java,.xml,.yaml,.yml,.ini,.cfg,.log,.csv">
-              <button class="btn ghost small" type="button" id="img-btn" hidden>Bild anhängen</button>
-              <input type="file" id="img-file" hidden accept="image/*" multiple>
-              <button class="btn ghost small" type="button" id="mic-btn" hidden>Diktieren</button>
-              <input type="file" id="audio-file" hidden accept="audio/*">
-              <button class="btn ghost small" type="button" id="stop-btn" hidden>Stopp</button>
-              <label class="sr" for="chat-model">Aktives Modell</label>
-              <select id="chat-model" title="Aktives Modell" disabled><option value="">Modell wählen</option></select>
-              <label id="chat-effort-wrap" class="chat-effort" hidden>Denkstufe
-                <select id="chat-effort"><option value="auto" selected>Automatisch</option><option value="low">Schnell</option><option value="medium">Standard</option><option value="high">Tief</option></select>
-              </label>
-              <button class="btn primary" type="submit" id="send-btn">Senden</button>
-            </div>
-          </form>
-        </section>
-        <details id="design-side" class="design-side" open hidden>
-          <summary id="design-side-title"></summary>
-          <div id="design-side-content"></div>
+      <section class="studio-welcome" id="studio-welcome" hidden>
+        <h1>Willkommen im<br>Butchies KI Studio 5.0</h1>
+        <p>Dein persönlicher KI-Assistent auf dem eigenen Server.</p>
+        <div class="studio-shortcuts">
+          <button class="studio-card" type="button" id="focus-chat"><strong>Chatten</strong><span>Mit deinen KI-Modellen</span></button>
+          <button class="studio-card nav" type="button" data-view="models"><strong>Modelle</strong><span>Verwalten und laden</span></button>
+          <button class="studio-card nav" type="button" data-view="system"><strong>Server</strong><span>Überwachen und steuern</span></button>
+          <button class="studio-card nav" type="button" data-view="settings"><strong>Einstellungen</strong><span>Studio anpassen</span></button>
+        </div>
+      </section>
+      <div id="messages" class="messages" aria-live="polite"></div>
+      <form id="composer" class="composer">
+        <div class="chat-mode">
+          <label for="chat-mode">Modus</label>
+          <select id="chat-mode">
+            <option value="auto">Automatisch</option>
+            <option value="chat">Chat</option>
+            <option value="work">Work · Schritt für Schritt</option>
+          </select>
+        </div>
+        <details class="chat-workspace">
+          <summary>Bot und Quellen</summary>
+          <label for="chat-bot">KI-Bot</label>
+          <select id="chat-bot"><option value="auto">Automatisch</option><option value="">Allgemein</option></select>
+          <div id="chat-sources"></div>
+          <div id="chat-web-panel" hidden>
+            <label for="chat-web-query">Web-Suchbegriff für die nächste Nachricht</label>
+            <input id="chat-web-query" type="search" maxlength="600" autocomplete="off">
+            <p class="muted small">Ein ausgefüllter Suchbegriff wird beim Senden an Brave Search übermittelt.</p>
+          </div>
+          <p class="muted small">Lange Quellen werden an das Kontextfenster angepasst.</p>
         </details>
-      </div>
+        <label for="input" class="sr">Nachricht</label>
+        <div id="attach-preview" class="attach-preview"></div>
+        <textarea id="input" rows="3" placeholder="Frag etwas … (Enter = senden, Umschalt+Enter = neue Zeile)"></textarea>
+        <div class="composer-row">
+          <button class="btn ghost small" type="button" id="chat-image-create" hidden>Bild erzeugen</button>
+          <button class="btn ghost small" type="button" id="attach-btn">Textdatei einfügen</button>
+          <input type="file" id="attach" hidden accept=".txt,.py,.js,.ts,.json,.md,.html,.css,.ps1,.bat,.sh,.cs,.cpp,.c,.h,.java,.xml,.yaml,.yml,.ini,.cfg,.log,.csv">
+          <button class="btn ghost small" type="button" id="img-btn" hidden>Bild anhängen</button>
+          <input type="file" id="img-file" hidden accept="image/*" multiple>
+          <button class="btn ghost small" type="button" id="mic-btn" hidden>Diktieren</button>
+          <input type="file" id="audio-file" hidden accept="audio/*">
+          <button class="btn ghost small" type="button" id="stop-btn" hidden>Stopp</button>
+          <label class="sr" for="chat-model">Aktives Modell</label>
+          <select id="chat-model" title="Aktives Modell" disabled><option value="">Modell wählen</option></select>
+          <label id="chat-effort-wrap" class="chat-effort" hidden>Denkstufe
+            <select id="chat-effort"><option value="auto" selected>Automatisch</option><option value="low">Schnell</option><option value="medium">Standard</option><option value="high">Tief</option></select>
+          </label>
+          <button class="btn primary" type="submit" id="send-btn">Senden</button>
+        </div>
+      </form>
     </main>
 
     <main class="view" id="view-discover" hidden>
@@ -276,7 +255,6 @@
     <main class="view" id="view-settings" hidden>
       <h1>Einstellungen</h1>
       <div class="settings-sections" aria-label="Einstellungsbereiche">
-        <button class="btn small" data-settings="design">Design</button>
         <button class="btn small" data-settings="setup">KI einrichten</button>
         <button class="btn small" data-settings="bots">KI-Bots</button>
         <button class="btn small" data-settings="memory">Gedächtnis</button>
@@ -290,15 +268,6 @@
         <button class="btn small" data-settings="connection">Verbindung</button>
         <button class="btn small" data-settings="password">Passwort</button>
       </div>
-      <section id="design-panel" class="card" hidden>
-        <h2>Design</h2>
-        <fieldset class="design-options">
-          <legend>Blau-weißes Layout für dieses Gerät</legend>
-          <div id="design-options" class="design-grid"></div>
-        </fieldset>
-        <p id="design-status" role="status" hidden></p>
-        <button id="design-open-chat" class="btn small" type="button">Im Chat ansehen</button>
-      </section>
       <section id="ki-setup-panel" class="card form" hidden>
         <h2>KI einrichten</h2>
         <dl class="setup-status">

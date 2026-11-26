@@ -490,7 +490,7 @@ function messageEl(m) {
     if (m.mode === "work" && Array.isArray(m.steps)) {
       const progress = document.createElement("details");
       progress.className = "work-progress";
-      progress.open = !!m.pending || $("app").dataset.design === "timeline";
+      progress.open = !!m.pending;
       const heading = document.createElement("summary");
       heading.textContent = m.pending ? "Work · in Bearbeitung"
         : m.steps.includes("done") ? "Work · abgeschlossen"
@@ -556,7 +556,6 @@ function renderMessages() {
   const box = $("messages"); box.innerHTML = "";
   const c = currentChat();
   renderWorkspacePicker();
-  renderDesignSide();
   const empty = !c || !c.messages.length;
   $("app").classList.toggle("chat-home", empty);
   $("studio-welcome").hidden = !empty;
@@ -698,7 +697,6 @@ $("composer").addEventListener("submit", async (e) => {
         last = Date.now();
         const fresh = messageEl(bot); fresh.classList.add("cursor");
         box.replaceChild(fresh, box.lastChild); box.scrollTop = box.scrollHeight;
-        if (["bench", "split"].includes($("app").dataset.design)) renderDesignSide();
       }
     }
     if (streamError) throw new Error(streamError);
@@ -876,8 +874,7 @@ async function loadWorkspace() {
     state.workspace = await api("/api/workspace");
     renderWorkspacePicker(true);
     renderWorkspaceList();
-    renderDesignSide();
-  } catch (error) { $("workspace-msg").textContent = error.message; }
+    } catch (error) { $("workspace-msg").textContent = error.message; }
 }
 function downloadStudioData(name, content, mime) {
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
@@ -980,7 +977,6 @@ function openSettingsSection(section) {
   document.querySelectorAll("[data-settings]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.settings === section)));
   const editor = workspaceLabels[section];
   $("workspace-editor").hidden = !editor;
-  $("design-panel").hidden = section !== "design";
   $("settings-form").hidden = section !== "performance";
   $("token-form").hidden = section !== "tokens";
   $("pw-form").hidden = section !== "password";
@@ -1349,158 +1345,20 @@ $("img-form").addEventListener("submit", async (e) => {
   } catch (err) { showErr(err); }
 });
 
-// ---------------------------------------------------------------- Designs
-const DESIGNS = [
-  ["focus", "Fokus", "Mittiger Chat mit Platz für Antworten"],
-  ["tabs", "Register", "Direkte Navigation über Register oben"],
-  ["bench", "Werkbank", "Unterhaltung mit Arbeitsschritten daneben"],
-  ["project", "Projektmappe", "Bibliotheksdateien neben der Unterhaltung"],
-  ["rail", "Seitenleiste", "Schmale Symbolnavigation links"],
-  ["command", "Kommando", "Schnellzugriff über die Befehlsleiste"],
-  ["split", "Doppelfenster", "Unterhaltung und letzte Antwort nebeneinander"],
-  ["timeline", "Zeitachse", "Arbeitsschritte direkt im Verlauf"],
-  ["dock", "Werkzeugdock", "Werkzeuge am unteren Rand"],
-  ["launch", "Schnellstart", "Vier große Einstiegskacheln"],
-];
-const DESIGN_TOOLS = [
-  ["Chat", "▤", () => openChatMode("chat")],
-  ["Work", "✓", () => openChatMode("work")],
-  ["Modelle", "▱", () => setView("models")],
-  ["Bibliothek", "▧", () => { setView("settings"); openSettingsSection("library"); }],
-  ["Erweiterungen", "⊞", () => setView("ext")],
-  ["Einstellungen", "⚙", () => setView("settings")],
-];
-
-function openChatMode(mode) {
-  setView("chat");
-  $("chat-mode").value = mode;
-  $("chat-mode").dispatchEvent(new Event("change"));
-  $("input").focus();
-}
-
-function renderDesignSide() {
-  const mode = $("app").dataset.design;
-  const pane = $("design-side");
-  const headings = { bench: "Arbeitsschritte", project: "Projektdateien", split: "Letzte Antwort" };
-  pane.hidden = !Object.hasOwn(headings, mode);
-  if (pane.hidden) return;
-  $("design-side-title").textContent = headings[mode];
-  const target = $("design-side-content");
-  target.replaceChildren();
-  const messages = currentChat()?.messages || [];
-  if (mode === "project") {
-    for (const row of state.workspace?.workspace?.library || []) {
-      const file = document.createElement("details");
-      const name = document.createElement("summary");
-      name.textContent = row.name;
-      const content = document.createElement("p");
-      content.textContent = row.text;
-      file.append(name, content);
-      target.appendChild(file);
-    }
-    if (target.childElementCount) return;
-    target.textContent = "Dateien hinzufügen über Einstellungen → Bibliothek.";
-  } else if (mode === "bench") {
-    const latest = messages.findLast((message) => message.mode === "work");
-    const steps = latest?.steps || [];
-    if (steps.length) {
-      const list = document.createElement("ol");
-      for (const step of steps) {
-        if (!Object.hasOwn(WORK_STEPS, step)) continue;
-        const item = document.createElement("li");
-        item.textContent = WORK_STEPS[step];
-        list.appendChild(item);
-      }
-      target.appendChild(list);
-      return;
-    }
-    target.textContent = "Wähle Work, um die Arbeitsschritte hier zu sehen.";
-  } else {
-    const answer = messages.findLast((message) => message.role === "assistant" && message.content);
-    if (answer) renderMarkdown(answer.content, target);
-    else target.textContent = "Hier erscheint die letzte KI-Antwort.";
-  }
-}
-
-function applyDesign(requested) {
-  const [id, name] = DESIGNS.find(([id]) => id === requested) || DESIGNS[0];
-  $("app").dataset.design = id;
-  $("design-tools").hidden = !["tabs", "rail", "dock"].includes(id);
-  $("design-command").hidden = id !== "command";
-  $("launch-shortcuts").hidden = id !== "launch";
-  $("standard-shortcuts").hidden = id === "launch";
-  $("design-options").querySelectorAll("input").forEach((option) => { option.checked = option.value === id; });
-  $("design-status").hidden = false;
-  $("design-status").textContent = "Aktiv: " + name;
-  renderMessages();
-}
-
-for (const [name, icon, action] of DESIGN_TOOLS) {
-  const tool = button(name, "", action);
-  tool.title = name;
-  tool.setAttribute("aria-label", name);
-  const symbol = document.createElement("span");
-  symbol.textContent = icon;
-  symbol.setAttribute("aria-hidden", "true");
-  const text = document.createElement("span");
-  text.className = "design-tool-label";
-  text.textContent = name;
-  tool.replaceChildren(symbol, text);
-  $("design-tools").appendChild(tool);
-  const option = document.createElement("option");
-  option.value = name;
-  $("design-commands").appendChild(option);
-}
-
-$("design-command").addEventListener("submit", (event) => {
-  event.preventDefault();
-  const input = $("design-command-input");
-  const query = input.value.trim();
-  if (!query) return;
-  const command = DESIGN_TOOLS.find(([name]) => name.toLowerCase() === query.toLowerCase());
-  if (command) command[2]();
-  else {
-    const composer = $("input");
-    composer.value += (composer.value ? "\n" : "") + query;
-    composer.focus();
-  }
-  input.value = "";
-});
-document.addEventListener("keydown", (event) => {
-  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k"
-      && state.view === "chat" && !$("app").hidden && !$("design-command").hidden) {
-    event.preventDefault();
-    $("design-command-input").focus();
-  }
-});
-
-for (const [id, name, description] of DESIGNS) {
-  const card = document.createElement("label");
-  card.className = "design-choice";
-  const radio = document.createElement("input");
-  radio.type = "radio";
-  radio.name = "design";
-  radio.value = id;
-  radio.addEventListener("change", () => {
-    applyDesign(id);
-    try { localStorage.setItem("bki-design", id); } catch (error) {
-      $("design-status").textContent += " · Auf diesem Gerät konnte die Auswahl nicht gespeichert werden.";
-    }
-  });
-  const title = document.createElement("strong");
-  title.textContent = name;
-  const summary = document.createElement("span");
-  summary.textContent = description;
-  card.append(radio, title, summary);
-  $("design-options").appendChild(card);
-}
-let savedDesign;
-try { savedDesign = localStorage.getItem("bki-design"); } catch (error) { /* Gerätespeicher blockiert */ }
-applyDesign(savedDesign);
-$("design-open-chat").addEventListener("click", () => setView("chat"));
-$("launch-chat").addEventListener("click", () => openChatMode("chat"));
-$("launch-work").addEventListener("click", () => openChatMode("work"));
-$("launch-library").addEventListener("click", DESIGN_TOOLS[3][2]);
+// ---------------------------------------------------------------- Akzentfarbe aus Windows (vom Taskleisten-Programm übergeben)
+(function accentFromWindows() {
+  let acc = null;
+  try {
+    const q = new URLSearchParams(location.search).get("accent");
+    if (q && /^[0-9a-fA-F]{6}$/.test(q)) { acc = q; localStorage.setItem("bki-accent", q); history.replaceState(null, "", location.pathname); }
+    else acc = localStorage.getItem("bki-accent");
+  } catch (e) { /* kein Speicher */ }
+  if (!acc) return;
+  const r = parseInt(acc.slice(0, 2), 16), g = parseInt(acc.slice(2, 4), 16), b = parseInt(acc.slice(4, 6), 16);
+  const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  document.documentElement.style.setProperty("--accent", "#" + acc);
+  document.documentElement.style.setProperty("--on-accent", lum > 0.55 ? "#000000" : "#ffffff");
+})();
 
 // ---------------------------------------------------------------- Start
 let pollTimer = null;
