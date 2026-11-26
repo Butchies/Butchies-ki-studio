@@ -45,7 +45,7 @@ from collections import deque
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.23"
+VERSION = "0.4.24"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -257,6 +257,49 @@ def web_search(query):
         excerpt = html.unescape(re.sub(r"<[^>]*>", "", str(row.get("description", ""))))[:700]
         sources.append({"id": len(sources) + 1, "title": title, "url": url[:2048], "excerpt": excerpt})
     return sources
+
+
+ROUTING_RULES = {
+    "music": r"\b(?:suno|udio|songtexte?n?|lyrics|songpaket|musikprompt|song(?:s)?|chorus|radio[ -]?edit|lied(?:er)?|bpm)\b",
+    "code": r"\b(?:code|python|javascript|powershell|programmier\w*|debug\w*|traceback|stacktrace|fehlermeldung|installer|softwarefehler)\b",
+    "video": r"\b(?:youtube|thumbnail|storyboard|schnittplan|videotitel|videobeschreibung|untertitel|shorts)\b",
+    "research": r"\b(?:recherchier\w*|quellenvergleich|studienlage|websuche|quellenangaben)\b",
+    "writing": r"\b(?:anschreiben|pressemitteilung|artikel|newsletter|bewerbungsschreiben|korrekturlesen|übersetz\w*|e-mail)\b",
+}
+
+
+def route_chat(data, messages):
+    user_texts = [m["content"].strip() for m in messages[-12:] if isinstance(m, dict)
+                  and m.get("role") == "user" and isinstance(m.get("content"), str)]
+    text = user_texts[-1] if user_texts else ""
+    task = text[:6000]
+    bot = data.get("bot")
+    if bot == "auto":
+        def choose(value):
+            scores = {name: len(set(re.findall(pattern, value, re.IGNORECASE)))
+                      for name, pattern in ROUTING_RULES.items()}
+            if re.search(r"\b(?:suno|udio)\b", value, re.IGNORECASE):
+                scores["music"] += 2
+            winner = max(scores, key=scores.get)
+            return winner if scores[winner] else ""
+
+        bot = choose(task)
+        if not bot and re.match(r"^(?:und|weiter|mach|ändere|kürze|denselben|die version)\b", task, re.IGNORECASE):
+            bot = next((match for old in reversed(user_texts[:-1]) if (match := choose(old[:6000]))), "")
+    effort = data.get("reasoning_effort")
+    if effort == "auto":
+        if re.search(r"\b(?:absturz|traceback|fehlersuche|komplex|mehrstufig|tiefgehend|root cause|schritt für schritt)\b", task, re.IGNORECASE) or len(task) >= 1000:
+            effort = "high"
+        elif len(task) <= 100 and bot not in ("music", "code", "research", "video"):
+            effort = "low"
+        else:
+            effort = "medium"
+    query = data.get("web_query")
+    if (not query and data.get("bot") == "auto" and CONFIG.get("web_search_enabled")
+            and CONFIG.get("brave_search_key")
+            and re.match(r"^(?:bitte\s+)?(?:recherchiere|suche|such|schau)\s+(?:im (?:internet|web)|online)\b", task, re.IGNORECASE)):
+        query = " ".join(task.split()[:75])[:600]
+    return bot, effort, query
 
 
 def chat_context(data):
@@ -2443,11 +2486,12 @@ class Handler(BaseHTTPRequestHandler):
             if has_images:
                 VISION.ensure_running()
             return self.error("Die KI ist noch nicht bereit (%s)" % engine.state, 503)
-        context = chat_context(data)
+        bot, effort, query = route_chat(data, msgs)
+        context = chat_context(dict(data, bot=bot))
         sources = None
-        if data.get("web_query"):
+        if query:
             try:
-                sources = web_search(data["web_query"])
+                sources = web_search(query)
             except ValueError as error:
                 return self.error(str(error))
             except RuntimeError as error:
@@ -2472,9 +2516,8 @@ class Handler(BaseHTTPRequestHandler):
             "temperature": meta.get("temperature", 0.7),
             "top_p": meta.get("top_p", 0.8),
         }
-        effort = data.get("reasoning_effort")
-        if not has_images and effort in REASONING_LEVELS:
-            payload.update(reasoning_fields(active_reasoning_method(), effort))
+        effort_fields = reasoning_fields(active_reasoning_method(), effort) if not has_images and effort in REASONING_LEVELS else {}
+        payload.update(effort_fields)
         with ACTIVITY:
             try:
                 conn = http.client.HTTPConnection("127.0.0.1", engine.port, timeout=900)
@@ -2492,6 +2535,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
             try:
+                selected = next((item["name"] for item in STUDIO_BOTS if item["id"] == bot), "")
+                if data.get("bot") == "auto" or effort_fields:
+                    choice = {"bot": selected or ("Allgemein" if not bot else ""), "effort": effort if effort_fields else ""}
+                    event = "data: " + json.dumps({"studio_choice": choice}) + "\n\n"
+                    self.wfile.write(event.encode("utf-8"))
+                    self.wfile.flush()
                 if sources is not None:
                     visible_sources = [{k: v for k, v in row.items() if k != "excerpt"} for row in sources]
                     event = "data: " + json.dumps({"studio_sources": visible_sources}) + "\n\n"

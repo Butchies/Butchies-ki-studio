@@ -73,7 +73,7 @@ $sync = [hashtable]::Synchronized(@{
   Remember = (Test-Path $pwFile); State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
-  TrayVersion = "0.4.23"; UpdateCache = (Join-Path $cfgDir "cache")
+  TrayVersion = "0.4.24"; UpdateCache = (Join-Path $cfgDir "cache")
   WindowsUpdate = $null; Updating = $false; UpdateNotice = ""
 })
 

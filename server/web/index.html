@@ -94,7 +94,7 @@
         <details class="chat-workspace">
           <summary>Bot und Quellen</summary>
           <label for="chat-bot">KI-Bot</label>
-          <select id="chat-bot"><option value="">Allgemein</option></select>
+          <select id="chat-bot"><option value="auto">Automatisch</option><option value="">Allgemein</option></select>
           <div id="chat-sources"></div>
           <div id="chat-web-panel" hidden>
             <label for="chat-web-query">Web-Suchbegriff für die nächste Nachricht</label>
@@ -118,7 +118,7 @@
           <label class="sr" for="chat-model">Aktives Modell</label>
           <select id="chat-model" title="Aktives Modell" disabled><option value="">Modell wählen</option></select>
           <label id="chat-effort-wrap" class="chat-effort" hidden>Denkstufe
-            <select id="chat-effort"><option value="low">Schnell</option><option value="medium" selected>Standard</option><option value="high">Tief</option></select>
+            <select id="chat-effort"><option value="auto" selected>Automatisch</option><option value="low">Schnell</option><option value="medium">Standard</option><option value="high">Tief</option></select>
           </label>
           <button class="btn primary" type="submit" id="send-btn">Senden</button>
         </div>

@@ -369,7 +369,7 @@ function currentChat() { return state.chats.find((c) => c.id === state.current);
 
 function newChat() {
   state.current = null;
-  $("chat-effort").value = "medium";
+  $("chat-effort").value = "auto";
   setView("chat");
   renderMessages(); renderHistory();
   $("input").focus();
@@ -392,7 +392,7 @@ function renderHistory() {
     }
     const row = document.createElement("div"); row.className = "hist" + (c.id === state.current ? " active" : "");
     const open = document.createElement("button"); open.type = "button"; open.className = "open"; open.textContent = c.title;
-    open.addEventListener("click", () => { state.current = c.id; $("chat-effort").value = c.reasoningEffort || "medium"; setView("chat"); renderMessages(); renderHistory(); });
+    open.addEventListener("click", () => { state.current = c.id; $("chat-effort").value = c.reasoningEffort || "auto"; setView("chat"); renderMessages(); renderHistory(); });
     const del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "×";
     del.setAttribute("aria-label", "Chat löschen: " + c.title);
     del.addEventListener("click", () => {
@@ -415,6 +415,12 @@ function messageEl(m) {
     }
     d.appendChild(document.createTextNode(m.content));
   } else {
+    if (m.route) {
+      const details = document.createElement("small"); details.className = "muted";
+      const effort = { low: "Schnell", medium: "Standard", high: "Tief" }[m.route.effort];
+      details.textContent = [m.route.bot, effort].filter(Boolean).join(" · ");
+      if (details.textContent) d.appendChild(details);
+    }
     if (m.pending && !m.content) {
       const status = document.createElement("p"); status.className = "thinking-status"; status.textContent = "Denke nach …";
       d.appendChild(status);
@@ -573,6 +579,7 @@ $("composer").addEventListener("submit", async (e) => {
         if (payload === "[DONE]") continue;
         try {
           const j = JSON.parse(payload);
+          if (j.studio_choice) bot.route = j.studio_choice;
           if (Array.isArray(j.studio_sources)) bot.sources = j.studio_sources;
           const usage = j.usage;
           if (usage && Number.isInteger(usage.prompt_tokens) && Number.isInteger(usage.completion_tokens)) {
@@ -699,9 +706,9 @@ function renderWorkspacePicker(force = false) {
     : (chat?.workspace || {});
   renderedChat = chat?.id;
   const select = $("chat-bot");
-  select.replaceChildren(new Option("Allgemein", ""));
+  select.replaceChildren(new Option("Automatisch", "auto"), new Option("Allgemein", ""));
   [...state.workspace.presets, ...state.workspace.workspace.bots].forEach((bot) => select.add(new Option(bot.name, bot.id)));
-  select.value = choice.bot || "";
+  select.value = choice.bot ?? "auto";
   if (select.selectedIndex < 0) select.selectedIndex = 0;
   const target = $("chat-sources");
   target.replaceChildren();
