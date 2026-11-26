@@ -17,7 +17,12 @@ internal static class Program
 internal sealed class StudioWindow : Form
 {
     private readonly WebView2 view = new() { Dock = DockStyle.Fill };
-    private readonly Label status = new() { Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter };
+    private readonly LaunchPanel status = new() { Dock = DockStyle.Fill };
+    private readonly System.Windows.Forms.Timer animation = new() { Interval = 16 };
+    private readonly Stopwatch transition = new();
+    private readonly bool animate = SystemInformation.IsMenuAnimationEnabled;
+    private bool closing;
+    private bool closeReady;
     private readonly Button retry = new() { Dock = DockStyle.Bottom, Height = 42, Text = "Erneut verbinden" };
     private readonly Uri bridge = new("http://localhost:8765/");
     private readonly string home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ButchiesKI");
@@ -37,13 +42,65 @@ internal sealed class StudioWindow : Form
         Controls.Add(status);
         Controls.Add(retry);
         retry.Click += async (_, _) => await Connect();
-        Shown += async (_, _) => await Connect();
+        if (animate) Opacity = 0;
+        animation.Tick += Animate;
+        Shown += async (_, _) =>
+        {
+            transition.Restart();
+            if (animate) animation.Start();
+            await Connect();
+        };
+        FormClosed += (_, _) => animation.Dispose();
+    }
+
+    private void Animate(object? sender, EventArgs e)
+    {
+        var duration = closing ? 240d : 350d;
+        var progress = Math.Min(1, transition.Elapsed.TotalMilliseconds / duration);
+        var eased = progress * progress * (3 - 2 * progress);
+        Opacity = closing ? 1 - eased : eased;
+        if (status.Visible && !closing)
+        {
+            status.Phase = transition.Elapsed.TotalMilliseconds / 280;
+            status.Invalidate();
+        }
+        if (progress < 1) return;
+        if (closing)
+        {
+            animation.Stop();
+            closeReady = true;
+            Close();
+        }
+        else if (!status.Visible)
+        {
+            animation.Stop();
+        }
+    }
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (animate && !closeReady && e.CloseReason == CloseReason.UserClosing && (closing || Opacity > .95))
+        {
+            e.Cancel = true;
+            if (!closing)
+            {
+                closing = true;
+                transition.Restart();
+                animation.Start();
+            }
+        }
+        base.OnFormClosing(e);
     }
 
     private void ShowStatus(string message, bool canRetry)
     {
+        if (closing || IsDisposed) return;
         status.Text = message;
+        status.Invalidate();
         status.Visible = true;
+        status.BringToFront();
+        retry.BringToFront();
+        if (animate) animation.Start();
         retry.Visible = canRetry;
         view.Visible = false;
     }
@@ -57,7 +114,9 @@ internal sealed class StudioWindow : Form
             {
                 var environment = await CoreWebView2Environment.CreateAsync(
                     userDataFolder: Path.Combine(home, "desktop-profile"));
+                if (closing || IsDisposed) return;
                 await view.EnsureCoreWebView2Async(environment);
+                if (closing || IsDisposed) return;
                 view.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 view.CoreWebView2.NavigationStarting += (_, e) =>
                 {
@@ -74,10 +133,21 @@ internal sealed class StudioWindow : Form
                     if (e.IsUserInitiated && Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri)
                         && uri.Scheme is "https" or "http") OpenExternal(uri.AbsoluteUri);
                 };
-                view.CoreWebView2.NavigationCompleted += (_, e) =>
+                view.CoreWebView2.NavigationCompleted += async (_, e) =>
                 {
-                    if (!e.IsSuccess && e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                    if (closing || IsDisposed) return;
+                    if (e.IsSuccess)
+                    {
+                        var remaining = animate ? 450 - (int)transition.ElapsedMilliseconds : 0;
+                        if (remaining > 0) await Task.Delay(remaining);
+                        if (closing || IsDisposed) return;
+                        status.Visible = retry.Visible = false;
+                        view.Visible = true;
+                    }
+                    else if (e.WebErrorStatus != CoreWebView2WebErrorStatus.OperationCanceled)
+                    {
                         ShowStatus("Studio nicht erreichbar. Prüfe den Mini-PC und die Taskleisten-App.", true);
+                    }
                 };
                 initialized = true;
             }
@@ -95,8 +165,8 @@ internal sealed class StudioWindow : Form
                         origins.Add(uri.GetLeftPart(UriPartial.Authority));
             }
             origins.Add("http://butchies-ki");
-            status.Visible = retry.Visible = false;
-            view.Visible = true;
+            if (closing || IsDisposed) return;
+            retry.Visible = false;
             view.CoreWebView2.Navigate(bridge.AbsoluteUri);
         }
         catch (WebView2RuntimeNotFoundException)
@@ -116,5 +186,44 @@ internal sealed class StudioWindow : Form
     {
         try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
         catch (Exception e) { MessageBox.Show(this, e.Message, "Butchies KI Studio"); }
+    }
+}
+
+internal sealed class LaunchPanel : Control
+{
+    internal double Phase { get; set; }
+
+    internal LaunchPanel()
+    {
+        DoubleBuffered = true;
+        BackColor = Color.FromArgb(232, 244, 253);
+        ForeColor = Color.FromArgb(16, 44, 76);
+        ResizeRedraw = true;
+    }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var x = ClientSize.Width / 2;
+        var y = ClientSize.Height / 2 - 24;
+        var mark = new Rectangle(x - 31, y - 84, 62, 62);
+        using var blue = new SolidBrush(Color.FromArgb(8, 117, 199));
+        using var title = new Font(Font.FontFamily, 22, FontStyle.Bold);
+        using var markFont = new Font(Font.FontFamily, 29, FontStyle.Bold);
+        g.FillEllipse(blue, mark);
+        TextRenderer.DrawText(g, "B", markFont, mark, Color.White,
+            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+        var center = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter;
+        TextRenderer.DrawText(g, "Butchies KI Studio", title, new Rectangle(12, y - 9, Width - 24, 42), ForeColor, center);
+        TextRenderer.DrawText(g, Text, Font, new Rectangle(24, y + 35, Width - 48, 56), ForeColor,
+            center | TextFormatFlags.WordBreak);
+        for (var i = 0; i < 3; i++)
+        {
+            var alpha = 75 + (int)(170 * (.5 + .5 * Math.Cos(Phase - i * 1.5)));
+            using var dot = new SolidBrush(Color.FromArgb(alpha, blue.Color));
+            g.FillEllipse(dot, x - 20 + i * 16, y + 100, 8, 8);
+        }
     }
 }
