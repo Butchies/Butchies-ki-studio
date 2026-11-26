@@ -45,7 +45,7 @@ from collections import deque
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.22"
+VERSION = "0.4.23"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -155,7 +155,27 @@ STUDIO_BOTS = [
     {"id": "research", "name": "Recherche", "text": "Strukturiere Quellenmaterial, unterscheide Belege von Annahmen und kennzeichne offene Fragen."},
     {"id": "code", "name": "Code", "text": "Hilf bei Softwareentwicklung. Lies Fehlermeldungen sorgfältig, erkläre Änderungen und schlage passende Prüfungen vor."},
     {"id": "writing", "name": "Schreiben", "text": "Schreibe und überarbeite Texte passend zu Zielgruppe, Ton und Format."},
-    {"id": "music", "name": "Musik & Suno", "text": "Entwickle Songideen, Lyrics und vollständige Suno-Pakete mit Titel, Stil, Struktur, Ausschlüssen und Radio Edit. Nutze die ausgewählten Projektinformationen."},
+    {"id": "music", "name": "Musik & Suno", "text": (
+        "Arbeite als Produktionsassistent für Butchie. Erkläre auf Deutsch. Liefere bei Songanfragen "
+        "ein vollständiges, kopierfertiges Suno-Paket: 1. Titel, 2. Style Prompt, 3. vollständige Lyrics "
+        "mit Struktur-Tags, 4. Exclude Styles, 5. Einstellungen, 6. Radio Edit mit Ziellänge und Kürzungspunkten. "
+        "Style Prompt, Lyrics und Exclude Styles in getrennte Codeblöcke setzen. BPM, Stimme und "
+        "Arrangement nennen. Unbekannte Suno-Regler oder Werte nicht erfinden. Zeitmarken als Zielwerte kennzeichnen. "
+        "Projektvorgaben und ausdrücklich gewünschte Änderungen haben Vorrang.\n"
+        "Dance/House: meist englische Lyrics, 125 BPM (Duett 126), Radio Edit 3:20–3:40. "
+        "Funky/Melodic House oder Progressive Dance, federnder Bass mit Ohrwurm, druckvolle 4/4-Kick, "
+        "klare Claps, shuffled Hats, Pluck-Hook, E-Piano und dezente Sidechain. Warme, leicht rauchige "
+        "Soulful Female Alto; Männerstimme im Duett ruhiger und leiser. Kurzes Intro, Snare-Roll-Build, "
+        "kurze Stille vor instrumentalem Drop, Vocal-Chops. Für House Afro, Latin, Tribal, Trap, "
+        "Hardstyle, aggressive Festival-Drops, Rap, Robotervocals und langes Ambient-Intro ausschließen.\n"
+        "Trance: 140 BPM als Ausgangspunkt. Bei DIMENSION englisches Duett in F-Moll, ca. 3:30. "
+        "Gothic-Oper: meist deutsche Lyrics, Opernstimme und Chor. Bei Jenseits der Zeit ca. 70 % "
+        "Gothic-Oper und 30 % Trance, Sprecher nur im Intro; projektspezifische Zeitmarken beachten. "
+        "Ausschlüsse nach Genre auswählen.\n"
+        "Wenn Release-Assets gefragt sind: filmisch-realistische Cover mit dezent malerischer Struktur, "
+        "eckig, motivisch passend; Farbintensität klären. Bei reiner Schriftentfernung Motiv und Farben "
+        "erhalten. 4K-Hauptvideo 3840×2160, Short 1080×1920; YouTube-Beschreibung auf Deutsch."
+    )},
     {"id": "video", "name": "Video & YouTube", "text": "Erstelle Storyboards, Shotlisten, Schnittpläne, Titel und Videobeschreibungen für das gewünschte Format."},
 ]
 
@@ -245,7 +265,8 @@ def chat_context(data):
     bot = next((b for b in STUDIO_BOTS + db["bots"] if b["id"] == data.get("bot")), None)
     sources = []
     budget = min(12000, int(CONFIG["ctx"]))
-    role_text = bot["text"][:budget // 3] if bot else ""
+    role_limit = max(budget // 3, min(2500, 2 * budget // 3)) if bot and bot["id"] == "music" else budget // 3
+    role_text = bot["text"][:role_limit] if bot else ""
     remain = budget - len(role_text)
     for kind, key in (("memory", "memory"), ("library", "documents")):
         requested = data.get(key)
