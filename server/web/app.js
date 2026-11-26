@@ -57,6 +57,8 @@ function showGate(mode) {
   $("gate-recovery").hidden = !reset;
   $("gate-code").required = reset;
   $("gate-pin").required = reset;
+  $("gate-pin").disabled = !reset;
+  $("gate-code").disabled = !reset;
   $("gate-pw2-wrap").hidden = mode === "login";
   $("gate-pw2").required = mode !== "login";
   $("gate-pw").autocomplete = mode === "login" ? "current-password" : "new-password";

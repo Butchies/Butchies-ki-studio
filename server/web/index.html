@@ -19,11 +19,11 @@
       <code>sudo python3 /opt/butchies-ki/server.py --recovery-code</code>
       <label for="gate-code">Einmalcode</label>
       <input id="gate-code" autocomplete="off" spellcheck="false">
-      <label for="gate-pin">Rücksetz-PIN (0000)</label>
+      <label for="gate-pin">Rücksetz-PIN</label>
       <input id="gate-pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="••••">
     </div>
     <label for="gate-pw" id="gate-pw-label">Passwort</label>
-    <input id="gate-pw" type="password" autocomplete="current-password" required minlength="4" placeholder="••••">
+    <input id="gate-pw" type="password" autocomplete="current-password" required minlength="4">
     <div id="gate-pw2-wrap" hidden>
       <label for="gate-pw2">Passwort wiederholen</label>
       <input id="gate-pw2" type="password" autocomplete="new-password" minlength="4">

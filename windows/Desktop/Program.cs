@@ -1,3 +1,8 @@
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.RegularExpressions;
 using System.Diagnostics;
 using System.Drawing;
 using Microsoft.Web.WebView2.Core;
@@ -28,6 +33,7 @@ internal sealed class StudioWindow : Form
     private readonly string home = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ButchiesKI");
     private readonly HashSet<string> origins = new(StringComparer.OrdinalIgnoreCase);
     private bool initialized;
+    private bool autoLoginAttempted;
 
     internal StudioWindow()
     {
@@ -118,6 +124,18 @@ internal sealed class StudioWindow : Form
                 await view.EnsureCoreWebView2Async(environment);
                 if (closing || IsDisposed) return;
                 view.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                view.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
+                view.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;
+                view.CoreWebView2.WebResourceResponseReceived += (_, e) =>
+                {
+                    if (e.Response.StatusCode == 200 && Uri.TryCreate(e.Request.Uri, UriKind.Absolute, out var uri)
+                        && Allowed(uri) && uri.AbsolutePath == "/api/logout")
+                    {
+                        try { File.WriteAllText(Path.Combine(home, "desktop-autologin-paused"), ""); }
+                        catch (IOException) { }
+                        catch (UnauthorizedAccessException) { }
+                    }
+                };
                 view.CoreWebView2.NavigationStarting += (_, e) =>
                 {
                     if (!Uri.TryCreate(e.Uri, UriKind.Absolute, out var uri) || !Allowed(uri)) e.Cancel = true;
@@ -138,6 +156,8 @@ internal sealed class StudioWindow : Form
                     if (closing || IsDisposed) return;
                     if (e.IsSuccess)
                     {
+                        if (await TrySavedLogin()) return;
+                        if (closing || IsDisposed) return;
                         var remaining = animate ? 450 - (int)transition.ElapsedMilliseconds : 0;
                         if (remaining > 0) await Task.Delay(remaining);
                         if (closing || IsDisposed) return;
@@ -176,6 +196,68 @@ internal sealed class StudioWindow : Form
         catch (Exception e)
         {
             ShowStatus("Studio konnte nicht geöffnet werden.\n" + e.Message, true);
+        }
+    }
+
+    private async Task<bool> TrySavedLogin()
+    {
+        if (autoLoginAttempted || !Uri.TryCreate(view.CoreWebView2.Source, UriKind.Absolute, out var uri)
+            || !Allowed(uri) || uri.IsLoopback || uri.AbsolutePath != "/") return false;
+        autoLoginAttempted = true;
+        try
+        {
+            var origin = new Uri(uri.GetLeftPart(UriPartial.Authority));
+            // Nur der im Windows-Profil hinterlegte Server ist für das gespeicherte Passwort zulässig.
+            var config = new System.Web.Script.Serialization.JavaScriptSerializer()
+                .Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(home, "taskleiste.json")));
+            if (!config.TryGetValue("host", out var host) || host is not string configured
+                || !string.Equals(configured, uri.Host, StringComparison.OrdinalIgnoreCase)
+                || !uri.IsDefaultPort) return false;
+            var pausePath = Path.Combine(home, "desktop-autologin-paused");
+            var manager = view.CoreWebView2.CookieManager;
+            using var handler = new HttpClientHandler { AllowAutoRedirect = false, UseProxy = false };
+            foreach (var cookie in await manager.GetCookiesAsync(origin.AbsoluteUri))
+                if (cookie.Name == "bki") handler.CookieContainer.Add(origin, new Cookie(cookie.Name, cookie.Value, "/"));
+            using var client = new HttpClient(handler) { BaseAddress = origin, Timeout = TimeSpan.FromSeconds(4) };
+            using var state = await client.GetAsync("/api/state");
+            if (!state.IsSuccessStatusCode) return false;
+            var serializer = new System.Web.Script.Serialization.JavaScriptSerializer();
+            var server = serializer.Deserialize<Dictionary<string, object>>(await state.Content.ReadAsStringAsync());
+            if (server.TryGetValue("logged_in", out var loggedIn) && Equals(loggedIn, true))
+            {
+                if (File.Exists(pausePath)) File.Delete(pausePath);
+                return false;
+            }
+            if (File.Exists(pausePath)) return false;
+            var saved = Path.Combine(home, "passwort.dat");
+            if (!File.Exists(saved)) return false;
+            var hex = File.ReadAllText(saved).Trim();
+            if (hex.Length % 2 != 0 || !Regex.IsMatch(hex, "^[0-9a-fA-F]{2,8192}$")) return false;
+            var encrypted = new byte[hex.Length / 2];
+            for (var i = 0; i < encrypted.Length; i++) encrypted[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+            var clear = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
+            string password;
+            try { password = Encoding.Unicode.GetString(clear); }
+            finally { Array.Clear(clear, 0, clear.Length); }
+            if (password.Length == 0 || password == "0000") return false;
+            using var body = new StringContent(serializer.Serialize(new { password, remember = true }), Encoding.UTF8, "application/json");
+            using var login = await client.PostAsync("/api/login", body);
+            if (!login.IsSuccessStatusCode || closing || IsDisposed) return false;
+            var session = handler.CookieContainer.GetCookies(origin)["bki"];
+            if (session == null || string.IsNullOrEmpty(session.Value)) return false;
+            var webCookie = manager.CreateCookie("bki", session.Value, uri.Host, "/");
+            webCookie.IsHttpOnly = true;
+            webCookie.SameSite = CoreWebView2CookieSameSiteKind.Strict;
+            webCookie.IsSecure = uri.Scheme == "https";
+            if (session.Expires != DateTime.MinValue) webCookie.Expires = session.Expires.ToUniversalTime();
+            manager.AddOrUpdateCookie(webCookie);
+            view.CoreWebView2.Reload();
+            return true;
+        }
+        catch (Exception)
+        {
+            // Anmeldung bleibt bei ungültigem Passwort oder fehlender Verbindung manuell verfügbar.
+            return false;
         }
     }
 
