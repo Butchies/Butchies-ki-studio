@@ -773,6 +773,100 @@ async function loadWorkspace() {
     renderWorkspaceList();
   } catch (error) { $("workspace-msg").textContent = error.message; }
 }
+function downloadStudioData(name, content, mime) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const link = document.createElement("a");
+  link.href = url; link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function loadBackupChats() {
+  $("backup-chat").replaceChildren(...state.chats.map((chat) => new Option(chat.title || "Chat", chat.id)));
+  $("training-export").disabled = !state.chats.length || !!state.streaming;
+}
+$("backup-export").addEventListener("click", async () => {
+  try {
+    const { workspace } = await api("/api/workspace");
+    const payload = { format: "butchies-studio-backup-v1", created: new Date().toISOString(), workspace, chats: state.chats };
+    downloadStudioData("Butchies-Studio-Backup-" + payload.created.slice(0, 10) + ".json",
+      JSON.stringify(payload, (key, value) => ["think", "pending"].includes(key) ? undefined : value), "application/json");
+    $("backup-message").textContent = "Backup zum Download bereit.";
+  } catch (error) { $("backup-message").textContent = error.message; }
+});
+$("backup-import").addEventListener("click", () => $("backup-file").click());
+$("backup-file").addEventListener("change", async () => {
+  const input = $("backup-file");
+  const file = input.files[0]; input.value = "";
+  if (!file) return;
+  try {
+    if (state.streaming) throw new Error("Warte, bis die aktuelle Antwort fertig ist.");
+    if (file.size > 30_000_000) throw new Error("Backup ist größer als 30 MB.");
+    const backup = JSON.parse(await file.text());
+    if (backup.format !== "butchies-studio-backup-v1" || !Array.isArray(backup.chats)) throw new Error("Unbekanntes Backupformat.");
+    const ids = new Set(state.chats.map((chat) => chat.id));
+    const imported = [];
+    for (const chat of backup.chats) {
+      if (!chat || typeof chat.id !== "string" || typeof chat.title !== "string" || !Array.isArray(chat.messages)
+          || !chat.messages.every((msg) => msg && ["user", "assistant"].includes(msg.role) && typeof msg.content === "string")) {
+        throw new Error("Ungültiger Chat im Backup.");
+      }
+      if (ids.has(chat.id)) continue;
+      ids.add(chat.id);
+      const selected = chat.workspace;
+      const references = (key) => Array.isArray(selected?.[key])
+        ? selected[key].filter((id) => typeof id === "string" && /^[a-f0-9]{20}$/.test(id)).slice(0, 80) : [];
+      const workspace = { bot: typeof selected?.bot === "string" ? selected.bot : "auto",
+        memory: references("memory"), documents: references("documents") };
+      imported.push({ id: chat.id, title: chat.title, workspace,
+        reasoningEffort: ["auto", "low", "medium", "high"].includes(chat.reasoningEffort) ? chat.reasoningEffort : "auto",
+        messages: chat.messages.map(({ role, content, images, generatedImage }) => ({
+        role, content, ...(typeof generatedImage === "string" && /^bild-[0-9a-f-]+\.png$/.test(generatedImage) ? { generatedImage } : {}),
+        ...(Array.isArray(images) ? { images: images.filter((img) => typeof img === "string" && /^data:image\/(?:png|jpeg|webp);base64,/.test(img)) } : {}),
+      })) });
+    }
+    const combined = [...state.chats, ...imported];
+    if (combined.length > 50) throw new Error("Der Import würde die Grenze von 50 Chats überschreiten.");
+    const serialized = JSON.stringify(combined);
+    localStorage.setItem("bki-backup-import-check", serialized);
+    localStorage.removeItem("bki-backup-import-check");
+    await api("/api/backup/restore", { format: backup.format, workspace: backup.workspace });
+    localStorage.setItem("bki-chats", serialized);
+    state.chats = combined;
+    renderHistory(); loadBackupChats(); loadWorkspace();
+    $("backup-message").textContent = "Fehlende Einträge ergänzt. Vorhandene Einträge wurden beibehalten.";
+  } catch (error) { $("backup-message").textContent = error.message; }
+});
+$("training-export").addEventListener("click", () => {
+  const chat = state.chats.find((row) => row.id === $("backup-chat").value);
+  if (!chat || state.streaming) return;
+  const messages = chat.messages.map(({ role, content }) => ({ role, content }))
+    .filter(({ role, content }) => ["user", "assistant"].includes(role) && content.trim());
+  if (!messages.some((row) => row.role === "user") || !messages.some((row) => row.role === "assistant")) {
+    $("backup-message").textContent = "Der ausgewählte Chat braucht mindestens eine Frage und eine Antwort.";
+    return;
+  }
+  downloadStudioData("Butchies-Lernbeispiel.jsonl", JSON.stringify({ messages }) + "\n", "application/x-ndjson");
+});
+async function loadDeveloperGit() {
+  try {
+    const data = await api("/api/developer/git");
+    $("local-git-create").disabled = data.git.ready || !data.git.available;
+    $("local-git-message").textContent = data.git.ready ? "Lokale Git-Ablage bereit." : data.git.available ? "Noch keine Ablage eingerichtet." : "Git fehlt auf dem Mini-PC. Installiere es in der Linux-Konsole mit sudo apt install git.";
+    $("local-git-address").textContent = data.git.ready ? "ssh://" + data.user + "@" + data.host + data.git.path : "";
+    for (const [id, prefix] of [["developer-github", "https://github.com/"], ["developer-github-api", "https://api.github.com/repos/"]]) {
+      const link = $(id);
+      link.hidden = !/^[\w.-]+\/[\w.-]+$/.test(data.repo);
+      if (!link.hidden) link.href = prefix + data.repo;
+    }
+  } catch (error) { $("local-git-message").textContent = error.message; }
+}
+$("local-git-create").addEventListener("click", async () => {
+  $("local-git-create").disabled = true;
+  try { await api("/api/developer/git", {}); await loadDeveloperGit(); }
+  catch (error) { $("local-git-message").textContent = error.message; $("local-git-create").disabled = false; }
+});
+$("developer-updates").addEventListener("click", () => setView("system"));
+
 function openSettingsSection(section) {
   workspaceSection = section;
   document.querySelectorAll("[data-settings]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.settings === section)));
@@ -782,6 +876,10 @@ function openSettingsSection(section) {
   $("token-form").hidden = section !== "tokens";
   $("pw-form").hidden = section !== "password";
   $("connection-panel").hidden = section !== "connection";
+  $("backup-panel").hidden = section !== "backup";
+  $("developer-panel").hidden = section !== "developer";
+  if (section === "backup") loadBackupChats();
+  if (section === "developer") loadDeveloperGit();
   $("web-search-settings").hidden = section !== "web-search";
   $("image-tools-settings").hidden = section !== "image-tools";
   $("ki-setup-panel").hidden = section !== "setup";

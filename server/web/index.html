@@ -253,6 +253,8 @@
         <button class="btn small" data-settings="performance">Leistung &amp; Updates</button>
         <button class="btn small" data-settings="image-tools">Bildwerkzeuge</button>
         <button class="btn small" data-settings="web-search">Internet-Recherche</button>
+        <button class="btn small" data-settings="backup">Backup &amp; Export</button>
+        <button class="btn small" data-settings="developer">Git &amp; Entwicklung</button>
         <button class="btn small" data-settings="connection">Verbindung</button>
         <button class="btn small" data-settings="password">Passwort</button>
       </div>
@@ -359,6 +361,32 @@
         <button type="submit" class="btn primary">Speichern</button>
         <p id="web-search-msg" role="status"></p>
       </form>
+      <section id="backup-panel" class="card form" hidden>
+        <h2>Backup &amp; Export</h2>
+        <p>Das Backup enthält Chats dieses Geräts, eigene Bots, Gedächtnis und Textbibliothek. Modelle, Bilder, Passwörter und API-Schlüssel sind separat.</p>
+        <div class="btn-row">
+          <button id="backup-export" class="btn primary" type="button">Backup herunterladen</button>
+          <button id="backup-import" class="btn" type="button">Backup einlesen</button>
+          <input id="backup-file" type="file" accept=".json,application/json" hidden>
+        </div>
+        <h3>Lern- und Testdaten</h3>
+        <label for="backup-chat">Chat für den JSONL-Export</label>
+        <select id="backup-chat"></select>
+        <button id="training-export" class="btn" type="button">Ausgewählten Chat als JSONL exportieren</button>
+        <p id="backup-message" role="status"></p>
+      </section>
+      <section id="developer-panel" class="card form" hidden>
+        <h2>Git &amp; Entwicklung</h2>
+        <p>Lege auf deinem Mini-PC ein Repository für interne Tests an. Git-Zugriff erfolgt über deine vorhandene SSH-Anmeldung.</p>
+        <button class="btn primary" id="local-git-create" type="button">Lokale Git-Ablage erstellen</button>
+        <p id="local-git-message" role="status"></p>
+        <code id="local-git-address"></code>
+        <div class="btn-row">
+          <a id="developer-github" class="btn console-link" target="_blank" rel="noopener noreferrer" hidden>GitHub-Repository</a>
+          <a id="developer-github-api" class="btn console-link" target="_blank" rel="noopener noreferrer" hidden>GitHub-API</a>
+          <button class="btn" data-view="system" id="developer-updates" type="button">Studio-Updates</button>
+        </div>
+      </section>
       <section id="connection-panel" class="card form" hidden>
         <h2>Verbindung</h2>
         <p>Studio-Adresse: <code id="connection-host">butchies-ki</code></p>

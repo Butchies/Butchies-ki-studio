@@ -48,6 +48,7 @@ autoinstall:
     - avahi-daemon
     - ethtool
     - curl
+    - git
     - unzip
     - efibootmgr
     - libgomp1
