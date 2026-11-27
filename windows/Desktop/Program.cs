@@ -47,6 +47,21 @@ internal sealed class StudioWindow : Form
         Controls.Add(view);
         Controls.Add(status);
         Controls.Add(retry);
+        var menu = new MenuStrip();
+        var appearance = new ToolStripMenuItem("Darstellung");
+        foreach (var theme in new[]
+        {
+            ("Windows / System", "system"), ("Fusion", "fusion"), ("Architect", "architect"),
+            ("Aurora Glass", "aurora"), ("Obsidian", "obsidian"), ("Horizon", "horizon")
+        })
+        {
+            var choice = new ToolStripMenuItem(theme.Item1);
+            choice.Click += async (_, _) => await SelectTheme(theme.Item2);
+            appearance.DropDownItems.Add(choice);
+        }
+        menu.Items.Add(appearance);
+        MainMenuStrip = menu;
+        Controls.Add(menu);
         retry.Click += async (_, _) => await Connect();
         if (animate) Opacity = 0;
         animation.Tick += Animate;
@@ -111,6 +126,36 @@ internal sealed class StudioWindow : Form
         view.Visible = false;
     }
 
+    private async Task SelectTheme(string theme)
+    {
+        if (view.CoreWebView2 == null || !Uri.TryCreate(view.Source?.AbsoluteUri, UriKind.Absolute, out var uri)
+            || !Allowed(uri) || uri.IsLoopback) return;
+        var value = new System.Web.Script.Serialization.JavaScriptSerializer().Serialize(theme);
+        try
+        {
+            await view.CoreWebView2.ExecuteScriptAsync("if (typeof applyTheme === 'function') applyTheme(" + value + ");");
+        }
+        catch (InvalidOperationException) { /* The window or document is closing. */ }
+    }
+
+    private void ServeBundledInterface(CoreWebView2 core, CoreWebView2WebResourceRequestedEventArgs request)
+    {
+        if (request.Request.Method != "GET" || !Uri.TryCreate(request.Request.Uri, UriKind.Absolute, out var uri)
+            || !Allowed(uri) || uri.IsLoopback) return;
+        var asset = uri.AbsolutePath switch
+        {
+            "/" or "/index.html" => ("index.html", "text/html"),
+            "/app.js" => ("app.js", "application/javascript"),
+            "/app.css" => ("app.css", "text/css"),
+            _ => ("", "")
+        };
+        if (asset.Item1.Length == 0) return;
+        var content = typeof(StudioWindow).Assembly.GetManifestResourceStream("StudioWeb." + asset.Item1);
+        if (content == null) return;
+        request.Response = core.Environment.CreateWebResourceResponse(content, 200, "OK",
+            "Content-Type: " + asset.Item2 + "; charset=utf-8\r\nCache-Control: no-store");
+    }
+
     private async Task Connect()
     {
         ShowStatus("Verbinde mit Butchies KI Studio …", false);
@@ -123,6 +168,9 @@ internal sealed class StudioWindow : Form
                 if (closing || IsDisposed) return;
                 await view.EnsureCoreWebView2Async(environment);
                 if (closing || IsDisposed) return;
+                view.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All);
+                view.CoreWebView2.WebResourceRequested += (core, request) =>
+                    ServeBundledInterface((CoreWebView2)core, request);
                 view.CoreWebView2.Settings.AreDevToolsEnabled = false;
                 view.CoreWebView2.Settings.IsPasswordAutosaveEnabled = false;
                 view.CoreWebView2.Settings.IsGeneralAutofillEnabled = false;

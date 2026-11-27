@@ -10,6 +10,9 @@
     <ApplicationIcon>../logo.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Include="../../server/web/index.html" LogicalName="StudioWeb.index.html" />
+    <EmbeddedResource Include="../../server/web/app.js" LogicalName="StudioWeb.app.js" />
+    <EmbeddedResource Include="../../server/web/app.css" LogicalName="StudioWeb.app.css" />
     <Reference Include="System.Web.Extensions" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Security" />
