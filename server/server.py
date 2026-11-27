@@ -30,6 +30,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -45,7 +46,7 @@ from collections import deque
 from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-VERSION = "0.4.33"
+VERSION = "0.4.34"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 WEB_DIR = os.path.join(APP_DIR, "web")
@@ -176,6 +177,9 @@ STUDIO_BOTS = [
         "eckig, motivisch passend; Farbintensität klären. Bei reiner Schriftentfernung Motiv und Farben "
         "erhalten. 4K-Hauptvideo 3840×2160, Short 1080×1920; YouTube-Beschreibung auf Deutsch."
     )},
+    {"id": "yue", "name": "YuE2-Musikgenerator",
+     "desc": "Lokaler CPU-Test auf dem Linux-Mini-PC. Modelle lädt YuE2 beim ersten Render.",
+     "size_gb": 0, "speed": "langsam"},
     {"id": "video", "name": "Video & YouTube", "text": "Erstelle Storyboards, Shotlisten, Schnittpläne, Titel und Videobeschreibungen für das gewünschte Format."},
 ]
 
@@ -1515,8 +1519,84 @@ def install_rea():
         os.rename(bundle, ext_path("rea"))
 
 
+YUE_SOURCE = "https://github.com/multimodal-art-projection/YuE.git@1116bea76032bee5668e5f097294d082fa0b84f0"
+YUE_SONGS = os.path.join(DATA_DIR, "songs")
+
+
+def install_yue():
+    if DRYRUN:
+        raise RuntimeError("YuE2-Installation ist im Testmodus deaktiviert.")
+    if ext_installed("yue"):
+        return
+    JOB.progress(5, "Bereite Python für YuE2 vor …")
+    code, output = run(["apt-get", "install", "-y", "python3.12-venv", "time"], timeout=600)
+    if code:
+        raise RuntimeError("Linux-Pakete für YuE2: " + output[-600:])
+    root = ext_path("yue")
+    os.makedirs(root, exist_ok=True)
+    env_dir = os.path.join(root, "venv")
+    python = os.path.join(env_dir, "bin", "python")
+    commands = [
+        (20, ["python3.12", "-m", "venv", env_dir]),
+        (35, [python, "-m", "pip", "install", "--index-url", "https://download.pytorch.org/whl/cpu", "torch==2.10.0"]),
+        (60, [python, "-m", "pip", "install", "git+" + YUE_SOURCE]),
+        (85, [python, "-m", "yue2.cli", "--help"]),
+    ]
+    for progress, command in commands:
+        JOB.progress(progress, "Installiere und prüfe YuE2 (CPU) …")
+        code, output = run(command, timeout=1800)
+        if code:
+            raise RuntimeError("YuE2-Installation fehlgeschlagen: " + output[-700:])
+    if not os.access(os.path.join(env_dir, "bin", "yue2"), os.X_OK):
+        raise RuntimeError("YuE2-Kommando fehlt nach der Installation.")
+    ext_mark("yue", {"device": "cpu"})
+
+
+def render_yue(name):
+    if DRYRUN or not ext_installed("yue"):
+        raise RuntimeError("YuE2 ist nicht für einen Render eingerichtet.")
+    os.makedirs(YUE_SONGS, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".render-", dir=YUE_SONGS) as work:
+        request = os.path.join(work, "request.json")
+        output_dir = os.path.join(work, "song")
+        stats = os.path.join(work, "stats")
+        with open(request, "w", encoding="utf-8") as handle:
+            json.dump({"style": "English, melodic house, 125 BPM, warm soulful female alto, clean bass",
+                       "lyrics": "[Chorus]\nFeel the rhythm in the night\nLet it carry us tonight",
+                       "cot": "off", "seed": 831001}, handle)
+        command = ["/usr/bin/time", "-f", "%e %M", "-o", stats,
+                   ext_path("yue", "venv", "bin", "yue2"), "generate",
+                   "--request", request, "--device", "cpu", "--output", output_dir]
+        env = dict(os.environ, HF_HOME=ext_path("yue", "models"),
+                   OMP_NUM_THREADS=str(min(8, os.cpu_count() or 1)))
+        JOB.progress(10, "YuE2 lädt bei Bedarf Modelle und rendert den Refrain …")
+        output_log = os.path.join(DATA_DIR, "yue2.log")
+        with open(output_log, "wb") as handle:
+            with subprocess.Popen(command, env=env, stdout=handle, stderr=subprocess.STDOUT,
+                                  start_new_session=True) as process:
+                try:
+                    result = process.wait(timeout=7200)
+                except subprocess.TimeoutExpired:
+                    os.killpg(process.pid, signal.SIGKILL)
+                    raise RuntimeError("YuE2 hat das Zeitlimit von zwei Stunden erreicht.")
+        audio = os.path.join(output_dir, "audio.flac")
+        if result or not os.path.isfile(audio):
+            raise RuntimeError("YuE2 hat keine Audiodatei erzeugt. Details im Serverprotokoll yue2.log.")
+        wav = os.path.join(work, "audio.wav")
+        code, output = run([ext_path("yue", "venv", "bin", "python"), "-c",
+                           "import soundfile as sf,sys; a,r=sf.read(sys.argv[1]); sf.write(sys.argv[2],a,r)",
+                           audio, wav], timeout=120)
+        if code:
+            raise RuntimeError("WAV-Konvertierung fehlgeschlagen: " + output[-500:])
+        seconds, kib = read_file(stats).split()
+        with open(os.path.join(work, "result.json"), "w", encoding="utf-8") as handle:
+            json.dump({"file": name + ".wav", "seconds": float(seconds), "peak_mib": round(int(kib) / 1024)}, handle)
+        os.replace(wav, os.path.join(YUE_SONGS, name + ".wav"))
+        os.replace(os.path.join(work, "result.json"), os.path.join(YUE_SONGS, "latest.json"))
+
+
 INSTALLERS = {"vision": install_vision, "stt": install_stt, "tts": install_tts,
-              "images": install_images, "rea": install_rea}
+              "images": install_images, "rea": install_rea, "yue": install_yue}
 
 
 def uninstall_ext(eid):
@@ -2271,6 +2351,22 @@ class Handler(BaseHTTPRequestHandler):
                                    "reboot_required": os.path.exists("/var/run/reboot-required")})
         if path == "/api/ext":
             return self.send_json({"ok": True, "ext": ext_list()})
+        if path == "/api/music":
+            return self.send_json({"installed": ext_installed("yue"),
+                                   "latest": json.loads(read_file(os.path.join(YUE_SONGS, "latest.json"), "null"))})
+        if re.fullmatch(r"/api/music/[a-f0-9]{24}\.wav", path):
+            try:
+                handle = open(os.path.join(YUE_SONGS, path.rsplit("/", 1)[1]), "rb")
+            except FileNotFoundError:
+                return self.error("Audiodatei nicht gefunden", 404)
+            with handle:
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/wav")
+                self.send_header("Content-Length", str(os.fstat(handle.fileno()).st_size))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                shutil.copyfileobj(handle, self.wfile)
+            return
         if path == "/api/images":
             return self.send_json({"ok": True, "images": image_list()})
         if path.startswith("/api/images/file/"):
@@ -2537,7 +2633,7 @@ class Handler(BaseHTTPRequestHandler):
             eid = str(data.get("id", ""))
             if eid not in INSTALLERS:
                 return self.error("Unbekannte Erweiterung")
-            if eid == "rea":
+            if eid in ("rea", "yue"):
                 with JOB.lock:
                     if JOB.running:
                         return self.error("Es läuft schon eine Aufgabe", 409)
@@ -2545,6 +2641,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 uninstall_ext(eid)
             return self.send_json({"ok": True})
+        if path == "/api/music/test":
+            if not ext_installed("yue"):
+                return self.error("Bitte zuerst YuE2 installieren", 409)
+            ok = JOB.start("YuE2-Test-Refrain", render_yue, secrets.token_hex(12))
+            return self.send_json({"ok": ok, "error": "" if ok else "Es läuft schon eine Aufgabe"})
         if path == "/api/images/generate":
             prompt = str(data.get("prompt", "")).strip()
             engine = data.get("engine", "local")

@@ -211,6 +211,14 @@
       <h1>Erweiterungen</h1>
       <p class="muted">Zusätzliche KIs für deinen Mini-PC. Installation per Knopfdruck, jederzeit wieder entfernbar.</p>
       <div id="ext-list" class="list"></div>
+      <section class="card form" aria-labelledby="music-test-title">
+        <h2 id="music-test-title">YuE2-Musiktest</h2>
+        <p>Rendert einen kurzen Refrain auf der Linux-CPU. Beim ersten Render lädt YuE2 die Modelle.</p>
+        <button class="btn primary" id="music-test" type="button" disabled>Test-Refrain erzeugen</button>
+        <p id="music-test-status" role="status"></p>
+        <audio id="music-test-audio" controls preload="none" hidden></audio>
+        <a id="music-test-download" download="YuE2-Test-Refrain.wav" hidden>WAV herunterladen</a>
+      </section>
     </main>
 
     <!-- Bilder -->

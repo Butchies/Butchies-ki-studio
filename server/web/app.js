@@ -1197,9 +1197,32 @@ $("custom-form").addEventListener("submit", async (e) => {
 });
 
 // ---------------------------------------------------------------- Erweiterungen
+async function loadMusicTest() {
+  const data = await api("/api/music");
+  $("music-test").disabled = !data.installed || !!state.status?.job?.running;
+  const result = data.latest;
+  const audio = $("music-test-audio");
+  const download = $("music-test-download");
+  audio.hidden = download.hidden = !result;
+  if (result) {
+    const url = "/api/music/" + result.file;
+    if (audio.getAttribute("src") !== url) audio.src = download.href = url;
+  }
+  $("music-test-status").textContent = result
+    ? `Letzter Test: ${result.seconds.toLocaleString("de-DE")} s · ${result.peak_mib} MiB maximaler RAM des Renderprozesses`
+    : data.installed ? "Bereit für den ersten Render." : "Installiere zuerst den YuE2-Musikgenerator.";
+}
+$("music-test").addEventListener("click", async () => {
+  try {
+    await api("/api/music/test", {});
+    await pollStatus();
+  } catch (error) { $("music-test-status").textContent = error.message; }
+});
+
 async function loadExt() {
   try {
     const d = await api("/api/ext");
+    await loadMusicTest();
     const box = $("ext-list"); box.innerHTML = "";
     d.ext.forEach((x) => {
       const it = document.createElement("div"); it.className = "item";
