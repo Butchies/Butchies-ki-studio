@@ -11,6 +11,7 @@
      "size_gb": 5.0, "desc": "klein und schnell für kurze Fragen", "default": false, "temperature": 0.7, "top_p": 0.8}
   ],
   "extensions": [
+    {"id": "yue", "name": "YuE2-Musikgenerator (CPU-Test)", "desc": "Linux-Erweiterung für einen Test-Refrain. Modelle werden beim ersten Render geladen."},
     {"id": "vision", "name": "Bilder verstehen (Qwen2.5-VL 7B)", "size_gb": 6.1, "desc": "Screenshots und Fotos erklären"},
     {"id": "stt", "name": "Sprache → Text (Whisper)", "size_gb": 0.6, "desc": "Diktieren statt tippen"},
     {"id": "tts", "name": "Text → Sprache (Piper)", "size_gb": 0.1, "desc": "Antworten vorlesen"},
