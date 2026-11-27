@@ -507,9 +507,40 @@ function Starte($task) {
 # =====================================================================================
 # Oberfläche (WPF, Windows-11-Stil hell)
 # =====================================================================================
+
+# Gemeinsame lokale Designwahl (Installer und Taskleisten-App).
+$script:designPath = Join-Path (Join-Path $env:APPDATA "ButchiesKI") "design.txt"
+$script:designNames = @("fusion","architect","aurora","obsidian","horizon","system")
+function Read-StudioDesign {
+  try { $v = (Get-Content -LiteralPath $script:designPath -Raw -ErrorAction Stop).Trim().ToLowerInvariant(); if ($v -in $script:designNames) { return $v } } catch {}
+  return "fusion"
+}
+function Save-StudioDesign([string]$v) {
+  if ($v -notin $script:designNames) { return }
+  New-Item -ItemType Directory -Force -Path (Split-Path $script:designPath) | Out-Null
+  [IO.File]::WriteAllText($script:designPath,$v)
+}
+function StudioPalette {
+  switch (Read-StudioDesign) {
+    "fusion" { return @("#090F1A","#131C2B","#26374D","#F4F7FF","#A5B5CE","#40CAFF","#D37AFA","#07121E") }
+    "architect" { return @("#191B20","#24282E","#383D45","#F7F4EF","#B7B3AD","#FF9B42","#FFD0A0","#211205") }
+    "aurora" { return @("#10162A","#1C2940","#34465D","#F2F7FF","#A8BBD0","#65E8DC","#A978FF","#082626") }
+    "obsidian" { return @("#090D12","#151C23","#28333E","#F3F7FA","#A9B9C8","#48C6F5","#A4E5FF","#06141C") }
+    "horizon" { return @("#F3F6FC","#FFFFFF","#D8E2EF","#17263B","#53667F","#0868CF","#82B9FF","#FFFFFF") }
+    default { return @("#F3F3F3","#FBFBFB","#D1D1D1","#1A1A1A","#5C5C5C","#0067C0","#9FD8FF","#FFFFFF") }
+  }
+}
+function StudioFade($window,[bool]$opening) {
+  if (-not [Windows.SystemParameters]::ClientAreaAnimation) { return }
+  $a = if ($opening) { New-Object Windows.Media.Animation.DoubleAnimation(0,1,[TimeSpan]::FromMilliseconds(350)) } else { New-Object Windows.Media.Animation.DoubleAnimation(1,0,[TimeSpan]::FromMilliseconds(300)) }
+  $window.BeginAnimation([Windows.UIElement]::OpacityProperty,$a)
+}
+
+if (-not (Test-Path $script:designPath)) { Save-StudioDesign "fusion" }
+$studioP = StudioPalette
 $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Butchies KI Studio – Einrichtung" Width="900" Height="640" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
+        Title="Butchies KI Studio 5.0 – Einrichtung" Width="900" Height="640" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
         Background="#F3F3F3" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#1A1A1A">
   <Window.Resources>
     <SolidColorBrush x:Key="Acc" Color="#0067C0"/>
@@ -527,8 +558,8 @@ $xaml = @'
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Btn}">
       <Setter Property="Background" Value="#0067C0"/><Setter Property="BorderBrush" Value="#0067C0"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
-    <Style TargetType="TextBox"><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
-    <Style TargetType="PasswordBox"><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
+    <Style TargetType="TextBox"><Setter Property="Background" Value="#FBFBFB"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
+    <Style TargetType="PasswordBox"><Setter Property="Background" Value="#FBFBFB"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
     <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E5E5E5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="12,9"/></Style>
   </Window.Resources>
   <Grid>
@@ -566,7 +597,7 @@ $xaml = @'
           <Border x:Name="Logo" Width="112" Height="112" Background="Transparent">
             <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
             <Border.Effect><DropShadowEffect Color="#0067C0" BlurRadius="30" ShadowDepth="0" Opacity="0.45"/></Border.Effect>
-            <Viewbox Width="112" Height="112"><Canvas Width="100" Height="100"><Rectangle Canvas.Left="4" Canvas.Top="4" Width="92" Height="92" RadiusX="22" RadiusY="22" Fill="#0067C0"/><Path Data="M33,24 H53 C63,24 69,29 69,37 C69,42 66,46 62,47 C68,48 72,53 72,59 C72,68 65,74 54,74 H33 Z" Stroke="White" StrokeThickness="8" StrokeLineJoin="Round"/><Ellipse Canvas.Left="72.5" Canvas.Top="16.5" Width="11" Height="11" Fill="#9FD8FF"/><Line X1="69" Y1="31" X2="75" Y2="25" Stroke="#9FD8FF" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox>
+            <Viewbox Width="112" Height="112"><Canvas Width="120" Height="120"><Ellipse Canvas.Left="12" Canvas.Top="97" Width="96" Height="15" Stroke="#0067C0" StrokeThickness="2"/><Path Data="M60,6 L106,31 L60,57 L14,31 Z M14,31 L60,57 L60,96 L14,70 Z M60,57 L106,31 L106,70 L60,96 Z" Fill="#FBFBFB" Stroke="#0067C0" StrokeThickness="2.5" StrokeLineJoin="Round"/><Path Data="M60,6 L106,31 L106,70 L60,96" Stroke="#9FD8FF" StrokeThickness="3" Fill="Transparent"/><TextBlock Canvas.Left="39" Canvas.Top="47" Text="KI" FontSize="27" FontWeight="Bold" Foreground="#0067C0"/></Canvas></Viewbox>
           </Border>
         </Grid>
         <TextBlock Text="Willkommen bei Butchies KI Studio" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,6"/>
@@ -680,7 +711,12 @@ $xaml = @'
 </Window>
 '@
 
+$studioMap = @{ "#F3F3F3"=0; "#FBFBFB"=1; "#D1D1D1"=2; "#1A1A1A"=3; "#5C5C5C"=4; "#0067C0"=5; "#9FD8FF"=6; "#EEEEEE"=1; "#EBEBEB"=1; "#E0E0E0"=2; "#E5E5E5"=2; "#D4D4D4"=2; "#C4C4C4"=2; "#E5F1FB"=1; "#B7D6F0"=2; "#003E73"=5; "#3B3B3B"=3 }
+foreach ($k in $studioMap.Keys) { $xaml = $xaml.Replace($k, "%STUDIO$($studioMap[$k])%") }
+$xaml = $xaml.Replace('Property="Foreground" Value="White"','Property="Foreground" Value="%STUDIO7%"').Replace('Property="Background" Value="White"','Property="Background" Value="%STUDIO1%"')
+for ($i=0;$i -lt $studioP.Count;$i++) { $xaml=$xaml.Replace("%STUDIO$i%",$studioP[$i]) }
 $w = [Windows.Markup.XamlReader]::Parse($xaml)
+$w.Add_Loaded({ StudioFade $w $true })
 try { $w.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([IO.MemoryStream]::new([Convert]::FromBase64String($LogoPng))) } catch {}
 $ui = @{}
 foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
@@ -688,7 +724,7 @@ foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWe
   "PgStick", "StickTitle", "StickSub", "TbHost", "TbUser", "Pw1", "Pw2", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText",
   "ErrText", "BtnLog", "BtnBack", "BtnNext") { $ui[$n] = $w.FindName($n) }
 
-function Brush($c) { (New-Object Windows.Media.BrushConverter).ConvertFromString($c) }
+function Brush($c) { if ($studioMap.ContainsKey($c)) { $c=$studioP[$studioMap[$c]] }; (New-Object Windows.Media.BrushConverter).ConvertFromString($c) }
 foreach ($g in $ui.Blocks, $ui.FBlocks) { for ($i = 0; $i -lt 20; $i++) { $r = New-Object Windows.Shapes.Rectangle; $r.Margin = "1.5,0"; $r.RadiusX = 2; $r.RadiusY = 2; $r.Fill = Brush "#D4D4D4"; [void]$g.Children.Add($r) } }
 function SetBlocks($grid, $p) { $on = [Math]::Floor($p / 5); for ($i = 0; $i -lt 20; $i++) { $grid.Children[$i].Fill = if ($i -lt $on) { Brush "#0067C0" } else { Brush "#D4D4D4" } } }
 
