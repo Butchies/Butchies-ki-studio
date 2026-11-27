@@ -12,7 +12,8 @@ param([switch]$Elevated)
 
 $ErrorActionPreference = "Stop"
 $Repo = "Butchies/Butchies-ki-studio"
-$SetupVersion = "0.4.7"
+$SetupVersion = "0.4.28"
+$ReleaseRef = "fix/0.4.8-studio-login"
 $LogoPng = "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"
 # Komplettes Paket (installer, server, Taskleiste) – wird beim Bauen der EXE eingefügt
 $EmbeddedPayload = "__PAYLOAD__"
@@ -38,7 +39,7 @@ $ScriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent ([Di
 $sync = [hashtable]::Synchronized(@{
   Ver = 0; Rows = (New-Object Collections.ArrayList); Percent = -1; PercentText = ""; Busy = $false; Done = ""; Error = ""
   Autopilot = $true; Log = (New-Object Collections.ArrayList)
-  Repo = $Repo; Cache = $Cache; Home = $Home2; ScriptDir = $ScriptDir; SetupVersion = $SetupVersion
+  Repo = $Repo; ReleaseRef = $ReleaseRef; Cache = $Cache; Home = $Home2; ScriptDir = $ScriptDir; SetupVersion = $SetupVersion
   Latest = ""; Catalog = $null; Embedded = $EmbeddedPayload; Disks = @(); Choice = @{}; Follow = $null; ExtractDir = ""
 })
 
@@ -108,10 +109,64 @@ function Download($url, $dest, $label, $pFrom, $pTo) {
 # ---------------------------------------------------------------- Aufgaben
 switch ($task) {
 
-"start" {
-  try { $sync.Latest = (GetText "https://raw.githubusercontent.com/$($sync.Repo)/main/VERSION").Trim() } catch { $sync.Latest = "" }
+"studio-auth" {
+  $inputData = $sync.AuthInput
+  $sync.AuthInput = $null
+  $target = $sync.Choice.Host
+  if (-not $target) { $target = "butchies-ki" }
+  $handler = New-Object System.Net.Http.HttpClientHandler
+  $handler.AllowAutoRedirect = $false
+  $client = New-Object System.Net.Http.HttpClient -ArgumentList $handler
+  $client.Timeout = [TimeSpan]::FromSeconds(8)
+  $result = @{ Mode = $inputData.Mode; Error = "" }
   try {
-    $cat = GetText "https://raw.githubusercontent.com/$($sync.Repo)/main/modelle.json"
+    if ($inputData.Mode -ne "probe") {
+      $path = switch ($inputData.Mode) { "setup" { "setup" } "reset" { "login/reset" } default { "login" } }
+      $json = @{ password = $inputData.Password; pin = $inputData.Pin; code = $inputData.Code } | ConvertTo-Json -Compress
+      $body = New-Object System.Net.Http.StringContent -ArgumentList $json, ([Text.Encoding]::UTF8), "application/json"
+      $reply = $client.PostAsync("http://$target/api/$path", $body).GetAwaiter().GetResult()
+      if (-not $reply.IsSuccessStatusCode) {
+        $errorBody = $reply.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+        throw $errorBody.error
+      }
+    }
+    $state = $client.GetStringAsync("http://$target/api/state").GetAwaiter().GetResult() | ConvertFrom-Json
+    if ($inputData.Mode -eq "probe") {
+      if (-not $state.ok) { throw "Kein Studio-Server an dieser Adresse gefunden." }
+      $result.Mode = if ($state.needs_password) { "setup" } else { "login" }
+      $saved = Join-Path $sync.Home "passwort.dat"
+      if ($result.Mode -eq "login" -and (Test-Path $saved)) {
+        try {
+          $secure = Get-Content $saved -Raw | ConvertTo-SecureString
+          $credential = New-Object System.Net.NetworkCredential("", $secure)
+          $json = @{ password = $credential.Password } | ConvertTo-Json -Compress
+          $body = New-Object System.Net.Http.StringContent -ArgumentList $json, ([Text.Encoding]::UTF8), "application/json"
+          $reply = $client.PostAsync("http://$target/api/login", $body).GetAwaiter().GetResult()
+          if ($reply.IsSuccessStatusCode) {
+            $state = $client.GetStringAsync("http://$target/api/state").GetAwaiter().GetResult() | ConvertFrom-Json
+            $result.Success = [bool]$state.logged_in
+          }
+        } catch { $result.Success = $false }
+      }
+    } elseif (-not $state.logged_in) {
+      throw "Die Studio-Sitzung konnte nicht bestätigt werden."
+    } else {
+      $pwFile = Join-Path $sync.Home "passwort.dat"
+      if ($inputData.Remember) {
+        ConvertTo-SecureString $inputData.Password -AsPlainText -Force | ConvertFrom-SecureString | Set-Content -Path $pwFile
+      } elseif (Test-Path $pwFile) { Remove-Item $pwFile -Force }
+      $result.Success = $true
+    }
+  } catch { $result.Error = $_.Exception.Message }
+  finally { $client.Dispose() }
+  $sync.AuthResult = $result
+  $sync.Done = "studio-auth"; Ping
+}
+
+"start" {
+  try { $sync.Latest = (GetText "https://raw.githubusercontent.com/$($sync.Repo)/refs/heads/$($sync.ReleaseRef)/VERSION").Trim() } catch { $sync.Latest = "" }
+  try {
+    $cat = GetText "https://raw.githubusercontent.com/$($sync.Repo)/refs/heads/$($sync.ReleaseRef)/modelle.json"
     Set-Content -Path (Join-Path $sync.Cache "modelle.json") -Value $cat -Encoding UTF8
   } catch {}
   $f = Join-Path $sync.Cache "modelle.json"
@@ -170,21 +225,46 @@ switch ($task) {
   Copy-Item -Force (Join-Path $src "windows\Butchies-KI.ps1") (Join-Path $sync.Home "Butchies-KI.ps1")
   $host2 = $sync.Choice.Host; if (-not $host2) { $host2 = "butchies-ki" }
   $tcfg = Join-Path $sync.Home "taskleiste.json"
-  if (-not (Test-Path $tcfg)) { @{ host = $host2; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tcfg -Encoding UTF8 }
+  $oldConfig = if (Test-Path $tcfg) { try { Get-Content $tcfg -Raw | ConvertFrom-Json } catch {} }
+  if (-not $oldConfig -or $oldConfig.host -ne $host2) {
+    $legacyPassword = Join-Path $sync.Home "passwort.dat"
+    if (Test-Path $legacyPassword) { Remove-Item $legacyPassword -Force }
+    @{ host = $host2; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tcfg -Encoding UTF8
+  }
+  $originHost = $host2
   Row tray ok "Taskleisten-Programm »Butchies KI«" "Status-Symbol mit Auslastung"; Pct 35
   $ps1 = Join-Path $sync.Home "Butchies-KI.ps1"
+  $protocol = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Software\Classes\butchies-ki-ssh")
+  try {
+    $protocol.SetValue("", "URL:Butchies KI Linux-Konsole")
+    $protocol.SetValue("URL Protocol", "")
+    $handler = $protocol.CreateSubKey("shell\open\command")
+    try {
+      $engine = Join-Path $PSHOME "powershell.exe"
+      $handler.SetValue("", ('"{0}" -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "{1}" -ConsoleOnly' -f $engine, $ps1))
+    } finally { $handler.Dispose() }
+  } finally { $protocol.Dispose() }
   $sh = New-Object -ComObject WScript.Shell
-  $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-  Row edge spin "Edge-App-Profil mit Mikrofon-Freigabe" "für Diktieren im Butchies-KI-Fenster"
-  New-Item -ItemType Directory -Force -Path (Join-Path $sync.Home "edge-profil") | Out-Null
-  Row edge ok "Edge-App-Profil mit Mikrofon-Freigabe" "für Diktieren im Butchies-KI-Fenster"; Pct 50
+  $sourceDesktop = Join-Path $src "windows\desktop-app"
+  if (-not (Test-Path (Join-Path $sourceDesktop "Butchies-KI-Studio.exe"))) {
+    throw "Desktop-App fehlt im Paket. Verwende die veröffentlichte Setup.exe."
+  }
+  $desktopDir = Join-Path $sync.Home "desktop-app"
+  Get-Process -Name "Butchies-KI-Studio" -ErrorAction SilentlyContinue |
+    Where-Object { $_.Path -eq (Join-Path $desktopDir "Butchies-KI-Studio.exe") } |
+    Stop-Process -ErrorAction Stop
+  New-Item -ItemType Directory -Force -Path $desktopDir | Out-Null
+  Copy-Item -Path (Join-Path $sourceDesktop "*") -Destination $desktopDir -Recurse -Force
+  $desktop = Join-Path $desktopDir "Butchies-KI-Studio.exe"
+  Row desktop ok "Butchies KI Desktop" "Eigenes Windows-Fenster"; Pct 50
   Row lnk spin "Desktop-Verknüpfung und Startmenü"
   $startMenu = Join-Path ([Environment]::GetFolderPath("Programs")) "Butchies KI"
   New-Item -ItemType Directory -Force -Path $startMenu | Out-Null
   foreach ($dir in @([Environment]::GetFolderPath("Desktop"), $startMenu)) {
     $l = $sh.CreateShortcut((Join-Path $dir "Butchies KI.lnk"))
-    if ($edge) { $l.TargetPath = $edge; $l.Arguments = "--app=http://localhost:8765/ --user-data-dir=`"$($sync.Home)\edge-profil`" --window-size=1400,900 --unsafely-treat-insecure-origin-as-secure=http://$host2.local"; $l.IconLocation = "$edge,0" }
-    else { $l.TargetPath = "http://localhost:8765/" }
+    $l.TargetPath = $desktop
+    $l.Arguments = ""
+    $l.IconLocation = "$desktop,0"
     $l.Save()
   }
   Row lnk ok "Desktop-Verknüpfung und Startmenü"; Pct 65
@@ -205,6 +285,7 @@ Remove-Item (Join-Path ([Environment]::GetFolderPath("Startup")) "Butchies KI.ln
 Remove-Item (Join-Path ([Environment]::GetFolderPath("Desktop")) "Butchies KI.lnk") -Force
 Remove-Item (Join-Path ([Environment]::GetFolderPath("Programs")) "Butchies KI") -Recurse -Force
 Remove-Item "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ButchiesKI" -Recurse -Force
+Remove-Item "HKCU:\Software\Classes\butchies-ki-ssh" -Recurse -Force
 Start-Sleep -Seconds 1
 Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
 [Windows.MessageBox]::Show("Butchies KI wurde entfernt.", "Butchies KI") | Out-Null
@@ -218,16 +299,34 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
   Set-ItemProperty $k -Name NoModify -Value 1 -Type DWord
   Set-ItemProperty $k -Name NoRepair -Value 1 -Type DWord
   Row unin ok "Eintrag in »Apps & Features«" "zum sauberen Deinstallieren"; Pct 92
-  Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ps1`" -MiniPC $host2"
+  if (-not $sync.Choice.WindowsOnly) {
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ps1`" -MiniPC $host2"
+  } else { $sync.StartTrayOnClose = $true }
   Pct 100 "Windows-Teil fertig"
   $sync.Done = "windows"; Ping
 }
 
 "payload" {
   # Neueste Butchies-Dateien von GitHub (Offline: letzter Stand im Cache, sonst neben dem Setup)
-  $zip = Join-Path $sync.Cache "butchies-main.zip"; $dir = Join-Path $sync.Cache "butchies-main"
+  $dir = Join-Path $sync.Cache ("butchies-studio-" + $sync.SetupVersion)
+  $zip = "$dir.zip"
+  if ($sync.Embedded -or $sync.Choice.WindowsOnly) {
+    $localRoot = Split-Path $sync.ScriptDir -Parent
+    if ($sync.Embedded -eq ("__PAY" + "LOAD__") -and (Test-Path (Join-Path $localRoot "windows\desktop-app\Butchies-KI-Studio.exe"))) {
+      $sync.ExtractDir = $localRoot; $sync.Done = "payload"; Ping; return
+    }
+    if ($sync.Embedded -and $sync.Embedded -ne ("__PAY" + "LOAD__")) {
+      $tempDir = Join-Path $sync.Cache ("windows-" + $sync.SetupVersion)
+      if (-not (Test-Path (Join-Path $tempDir "butchies-ki-studio\windows\Butchies-KI.ps1"))) {
+        $tempZip = "$tempDir.zip"
+        [IO.File]::WriteAllBytes($tempZip, [Convert]::FromBase64String($sync.Embedded))
+        Expand-Archive -Path $tempZip -DestinationPath $tempDir -Force
+      }
+      $sync.ExtractDir = Join-Path $tempDir "butchies-ki-studio"; $sync.Done = "payload"; Ping; return
+    }
+  }
   try {
-    $bytes = $http.GetByteArrayAsync("https://codeload.github.com/$($sync.Repo)/zip/refs/heads/main").Result
+    $bytes = $http.GetByteArrayAsync("https://codeload.github.com/$($sync.Repo)/zip/refs/heads/$($sync.ReleaseRef)").Result
     [IO.File]::WriteAllBytes($zip, $bytes)
     if (Test-Path $dir) { Remove-Item $dir -Recurse -Force }
     Expand-Archive -Path $zip -DestinationPath $dir -Force
@@ -475,10 +574,10 @@ Remove-Item (Join-Path $env:APPDATA "ButchiesKI") -Recurse -Force
         $sync.Follow = @{ Phase = "Installation"; Percent = [int]$t.percent; Text = $t.text; State = $t.state }
         if ($t.state -eq "fertig" -or $t.percent -ge 99) { $phase = "ki" }
       } else {
-        $t = (GetText "http://$h.local/api/state") | ConvertFrom-Json
+        $t = (GetText "http://${h}/api/state") | ConvertFrom-Json
         $j = $t.job
         if ($j.running) { $sync.Follow = @{ Phase = "Ersteinrichtung (KI laden)"; Percent = [int]$j.percent; Text = $j.text; State = "running" } }
-        else { $sync.Follow = @{ Phase = "Fertig"; Percent = 100; Text = "Mini-PC ist bereit: http://$h.local"; State = "fertig" } }
+        else { $sync.Follow = @{ Phase = "Fertig"; Percent = 100; Text = "Mini-PC ist bereit: http://$h"; State = "fertig" } }
       }
     } catch {
       if (-not $sync.Follow) { $sync.Follow = @{ Phase = "Warte auf Mini-PC"; Percent = 0; Text = "Mini-PC einschalten – er meldet sich hier, sobald die Installation läuft."; State = "wait" } }
@@ -510,7 +609,7 @@ function Starte($task) {
 $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Butchies KI Studio – Einrichtung" Width="900" Height="640" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
-        Background="#F3F3F3" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#1A1A1A">
+        Background="#FFFFFF" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#1A1A1A">
   <Window.Resources>
     <SolidColorBrush x:Key="Acc" Color="#0067C0"/>
     <Style x:Key="Btn" TargetType="Button">
@@ -536,7 +635,7 @@ $xaml = @'
     <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition/></Grid.ColumnDefinitions>
 
     <!-- Kopfzeile -->
-    <Border Grid.ColumnSpan="2" Background="#EEEEEE" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+    <Border Grid.ColumnSpan="2" Background="#EAF4FF" BorderBrush="#C4DDF4" BorderThickness="0,0,0,1">
       <DockPanel Margin="16,0">
         <Border DockPanel.Dock="Right" x:Name="AutoPill" CornerRadius="14" Background="#E5F1FB" Padding="10,4" VerticalAlignment="Center" Cursor="Hand">
           <StackPanel Orientation="Horizontal">
@@ -554,7 +653,7 @@ $xaml = @'
     </Border>
 
     <!-- Schritte links -->
-    <Border Grid.Row="1" Background="#EBEBEB" BorderBrush="#E0E0E0" BorderThickness="0,0,1,0">
+    <Border Grid.Row="1" Background="#EAF4FF" BorderBrush="#C4DDF4" BorderThickness="0,0,1,0">
       <StackPanel x:Name="StepList" Margin="18,18,10,0"/>
     </Border>
 
@@ -570,7 +669,10 @@ $xaml = @'
           </Border>
         </Grid>
         <TextBlock Text="Willkommen bei Butchies KI Studio" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,6"/>
-        <TextBlock TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Foreground="#5C5C5C" Text="Der Assistent richtet zuerst deinen Windows-PC ein und baut dann den USB-Stick für den Mini-PC – alles geprüft und auf dem neuesten Stand."/>
+        <TextBlock TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Foreground="#5C5C5C" Text="Wähle, ob dein Linux-Server schon läuft oder du ihn per USB-Stick neu einrichten möchtest."/>
+        <RadioButton x:Name="ExistingServer" GroupName="InstallMode" IsChecked="True" Content="Vorhandenen Linux-Server verbinden" Margin="0,18,0,8"/>
+        <TextBox x:Name="ExistingHost" Text="butchies-ki" AutomationProperties.Name="Servername oder IPv4-Adresse" ToolTip="Servername oder IPv4-Adresse"/>
+        <RadioButton x:Name="NewServer" GroupName="InstallMode" Content="Linux-Server per USB-Stick neu einrichten" Margin="0,12,0,0"/>
         <TextBlock x:Name="WelcomeInfo" HorizontalAlignment="Center" Margin="0,14,0,0" Foreground="#0F6B0F"/>
       </StackPanel>
 
@@ -634,7 +736,7 @@ $xaml = @'
           <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/><ColumnDefinition Width="10"/><ColumnDefinition/></Grid.ColumnDefinitions>
           <StackPanel><TextBlock Text="Name im Heimnetz" Foreground="#5C5C5C" Margin="0,0,0,4"/><TextBox x:Name="TbHost" Text="butchies-ki"/></StackPanel>
           <StackPanel Grid.Column="2"><TextBlock Text="Benutzer (Linux/SSH)" Foreground="#5C5C5C" Margin="0,0,0,4"/><TextBox x:Name="TbUser" Text="butchies"/></StackPanel>
-          <StackPanel Grid.Column="4"><TextBlock Text="Passwort (mind. 8 Zeichen)" Foreground="#5C5C5C" Margin="0,0,0,4"/><PasswordBox x:Name="Pw1"/></StackPanel>
+          <StackPanel Grid.Column="4"><TextBlock Text="Linux-/SSH-Passwort (mind. 8 Zeichen)" Foreground="#5C5C5C" Margin="0,0,0,4"/><PasswordBox x:Name="Pw1"/></StackPanel>
         </Grid>
         <StackPanel Orientation="Horizontal" Margin="0,8,0,0"><TextBlock Text="Passwort wiederholen:" Foreground="#5C5C5C" VerticalAlignment="Center" Margin="0,0,8,0"/><PasswordBox x:Name="Pw2" Width="220"/></StackPanel>
         <Border x:Name="WarnBox" Margin="0,16,0,0" Background="#FDE7E9" BorderBrush="#F1BBBC" BorderThickness="1" CornerRadius="8" Padding="14,10">
@@ -666,6 +768,43 @@ $xaml = @'
     </Grid>
 
     <!-- Fußzeile -->
+    <Border x:Name="StudioGate" Grid.Row="1" Grid.ColumnSpan="2" Background="#EAF4FF" Visibility="Collapsed">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <Border Width="440" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="24" Padding="28,22"
+                Background="White" BorderBrush="#CBDFF2" BorderThickness="1" CornerRadius="8">
+          <StackPanel>
+            <StackPanel Orientation="Horizontal">
+              <Image x:Name="StudioLogo" Width="32" Height="32" Margin="0,0,10,0"/>
+              <TextBlock Text="Butchies KI Studio" FontSize="20" FontWeight="SemiBold" Foreground="#14253D" VerticalAlignment="Center"/>
+              <TextBlock Text="Offline" Foreground="#0067C0" Margin="10,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <Border Height="1" Margin="0,14" Background="#CBDFF2"/>
+            <TextBlock x:Name="StudioTitle" Text="Anmelden" FontSize="26" FontWeight="SemiBold" Foreground="#14253D"/>
+            <TextBlock x:Name="StudioHint" Foreground="#455A72" TextWrapping="Wrap" Margin="0,5,0,14"/>
+            <StackPanel x:Name="StudioRecovery" Visibility="Collapsed">
+              <TextBlock Text="sudo python3 /opt/butchies-ki/server.py --recovery-code" TextWrapping="Wrap"/>
+              <TextBlock Text="Einmalcode" Margin="0,8,0,3"/>
+              <TextBox x:Name="StudioCode" AutomationProperties.Name="Einmalcode"/>
+              <TextBlock Text="Rücksetz-PIN (0000)" Margin="0,8,0,3"/>
+              <PasswordBox x:Name="StudioPin" MaxLength="4" AutomationProperties.Name="Rücksetz-PIN"/>
+            </StackPanel>
+            <StackPanel x:Name="StudioFields">
+              <TextBlock x:Name="StudioPasswordLabel" Text="Passwort" Margin="0,8,0,3"/>
+              <PasswordBox x:Name="StudioPassword" AutomationProperties.Name="Studio-Passwort"/>
+              <StackPanel x:Name="StudioRepeatPanel" Visibility="Collapsed">
+                <TextBlock Text="Passwort wiederholen" Margin="0,8,0,3"/>
+                <PasswordBox x:Name="StudioRepeat" AutomationProperties.Name="Passwort wiederholen"/>
+              </StackPanel>
+            </StackPanel>
+            <TextBlock x:Name="StudioError" Foreground="#A52222" TextWrapping="Wrap" Margin="0,8,0,4"/>
+            <CheckBox x:Name="StudioRemember" Content="Automatisch in der Taskleisten-App anmelden" Margin="0,0,0,10"/>
+            <Button x:Name="StudioSubmit" Content="Anmelden" IsDefault="True" Style="{StaticResource Primary}"/>
+            <Button x:Name="StudioSwitch" Content="Passwort zurücksetzen" Foreground="#0067C0"
+                    Cursor="Hand" Background="Transparent" BorderThickness="0" Margin="0,8,0,0"/>
+          </StackPanel>
+        </Border>
+      </ScrollViewer>
+    </Border>
     <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#EEEEEE" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
       <DockPanel Margin="20,0">
         <TextBlock x:Name="ErrText" Foreground="#C42B1C" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="440"/>
@@ -683,10 +822,83 @@ $xaml = @'
 $w = [Windows.Markup.XamlReader]::Parse($xaml)
 try { $w.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([IO.MemoryStream]::new([Convert]::FromBase64String($LogoPng))) } catch {}
 $ui = @{}
-foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
+foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "ExistingServer", "ExistingHost", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
   "PgUsb", "RbHave", "RbNew", "DiskList", "BtnRescan", "UsbInfo", "PgKi", "KiListInfo", "BtnCustom", "CustomUrl", "RbLater", "RbStick", "KiSum", "KiList",
   "PgStick", "StickTitle", "StickSub", "TbHost", "TbUser", "Pw1", "Pw2", "WarnBox", "WarnTitle", "CbConfirm", "StickErr", "PgDone", "FPct", "FPhase", "FBlocks", "FText",
+  "StudioGate", "StudioLogo", "StudioTitle", "StudioHint", "StudioRecovery", "StudioFields", "StudioPasswordLabel",
+  "StudioPassword", "StudioRepeatPanel", "StudioRepeat", "StudioPin", "StudioCode", "StudioError", "StudioRemember", "StudioSubmit", "StudioSwitch",
   "ErrText", "BtnLog", "BtnBack", "BtnNext") { $ui[$n] = $w.FindName($n) }
+
+$ui.StudioLogo.Source = $w.Icon
+
+function StudioMode($mode) {
+  $script:studioMode = $mode
+  $ui.StudioGate.Visibility = "Visible"
+  $hasFields = $mode -in "login", "setup", "reset"
+  $ui.StudioRemember.Visibility = if ($hasFields) { "Visible" } else { "Collapsed" }
+  $ui.StudioFields.Visibility = if ($hasFields) { "Visible" } else { "Collapsed" }
+  $ui.StudioRepeatPanel.Visibility = if ($mode -in "setup", "reset") { "Visible" } else { "Collapsed" }
+  $ui.StudioRecovery.Visibility = if ($mode -eq "reset") { "Visible" } else { "Collapsed" }
+  $ui.StudioSwitch.Visibility = if ($mode -in "login", "reset") { "Visible" } else { "Collapsed" }
+  $ui.StudioSwitch.Content = if ($mode -eq "reset") { "Zurück zur Anmeldung" } else { "Passwort zurücksetzen" }
+  $ui.StudioTitle.Text = switch ($mode) {
+    "setup" { "Ersteinrichtung" }
+    "reset" { "Passwort zurücksetzen" }
+    "success" { "Erfolgreich angemeldet" }
+    default { "Anmelden" }
+  }
+  $ui.StudioHint.Text = switch ($mode) {
+    "setup" { "Lege dein Studio-Passwort fest. Mindestens 4 Zeichen." }
+    "reset" { "Erzeuge auf dem Linux-Server einen Einmalcode und lege ein neues Passwort fest." }
+    "success" { "Die Verbindung mit deinem Studio wurde bestätigt." }
+    "probe" { "Der Installer prüft die Verbindung zum Studio-Server." }
+    default { "Gib dein Passwort für die Oberfläche ein." }
+  }
+  $ui.StudioPasswordLabel.Text = if ($mode -eq "login") { "Passwort" } else { "Neues Passwort" }
+  $ui.StudioSubmit.Content = switch ($mode) {
+    "probe" { "Erneut verbinden" }
+    "success" { "Fertig" }
+    "login" { "Anmelden" }
+    default { "Passwort festlegen" }
+  }
+  $ui.StudioError.Text = ""
+  $ui.StudioPassword.Clear(); $ui.StudioRepeat.Clear(); $ui.StudioPin.Clear(); $ui.StudioCode.Clear()
+  if ($hasFields) { [void]$ui.StudioPassword.Focus() }
+}
+
+function StudioRequest($inputData) {
+  $ui.StudioSubmit.IsEnabled = $false
+  $ui.StudioSwitch.IsEnabled = $false
+  $ui.StudioError.Text = ""
+  $sync.AuthInput = $inputData
+  Starte "studio-auth"
+}
+
+function StudioStart {
+  $ui.BtnNext.IsEnabled = $false
+  $ui.BtnBack.IsEnabled = $false
+  StudioMode "probe"
+  StudioRequest @{ Mode = "probe" }
+}
+
+$ui.StudioSwitch.Add_Click({
+  StudioMode $(if ($script:studioMode -eq "reset") { "login" } else { "reset" })
+})
+$ui.StudioSubmit.Add_Click({
+  $mode = $script:studioMode
+  if ($mode -eq "success") { $w.Close(); return }
+  if ($mode -eq "probe") { StudioRequest @{ Mode = "probe" }; return }
+  $pw = $ui.StudioPassword.Password
+  if ($pw.Length -lt 4) { $ui.StudioError.Text = "Mindestens 4 Zeichen eingeben."; return }
+  if ($mode -in "setup", "reset" -and $pw -cne $ui.StudioRepeat.Password) {
+    $ui.StudioError.Text = "Die Passwörter sind nicht gleich."; return
+  }
+  if ($mode -eq "reset" -and ($ui.StudioPin.Password -cne "0000" -or -not $ui.StudioCode.Text.Trim())) {
+    $ui.StudioError.Text = "Einmalcode und Rücksetz-PIN 0000 eingeben."; return
+  }
+  StudioRequest @{ Mode = $mode; Password = $pw; Remember = [bool]$ui.StudioRemember.IsChecked; Code = $ui.StudioCode.Text.Trim(); Pin = $ui.StudioPin.Password }
+  $ui.StudioPassword.Clear(); $ui.StudioRepeat.Clear()
+})
 
 function Brush($c) { (New-Object Windows.Media.BrushConverter).ConvertFromString($c) }
 foreach ($g in $ui.Blocks, $ui.FBlocks) { for ($i = 0; $i -lt 20; $i++) { $r = New-Object Windows.Shapes.Rectangle; $r.Margin = "1.5,0"; $r.RadiusX = 2; $r.RadiusY = 2; $r.Fill = Brush "#D4D4D4"; [void]$g.Children.Add($r) } }
@@ -892,9 +1104,22 @@ function GeheZu($n) {
 
 $ui.BtnNext.Add_Click({
   switch ($script:step) {
-    0 { GeheZu 1 }
+    0 {
+      $sync.Choice.WindowsOnly = [bool]$ui.ExistingServer.IsChecked
+      if ($sync.Choice.WindowsOnly) {
+        $server = $ui.ExistingHost.Text.Trim().ToLowerInvariant()
+        if ($server -notmatch '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$') {
+          Fehler "Bitte den Servernamen oder die IPv4-Adresse eingeben."; return
+        }
+        $sync.Choice.Host = $server
+        GeheZu 2
+      } else {
+        $sync.Choice.Host = ""
+        GeheZu 1
+      }
+    }
     1 { GeheZu 2 }
-    2 { GeheZu 3 }
+    2 { if ($sync.Choice.WindowsOnly) { $w.Close() } else { GeheZu 3 } }
     3 {
       $sel = $ui.DiskList.SelectedItem
       if (-not $sel) { Fehler "Bitte einen USB-Stick auswählen."; return }
@@ -932,7 +1157,12 @@ $ui.BtnNext.Add_Click({
       $ui.StickErr.Text = ""
       $sync.Choice.Host = $h; $sync.Choice.User = $u; $sync.Choice.Password = $ui.Pw1.Password
       $ui.Pw1.Clear(); $ui.Pw2.Clear()
-      $tc = Join-Path $Home2 "taskleiste.json"; @{ host = $h; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tc -Encoding UTF8
+      $tc = Join-Path $Home2 "taskleiste.json"
+      if ($h -ne "butchies-ki") {
+        $legacyPassword = Join-Path $Home2 "passwort.dat"
+        if (Test-Path $legacyPassword) { Remove-Item $legacyPassword -Force }
+      }
+      @{ host = $h; mac = ""; ip = "" } | ConvertTo-Json | Set-Content $tc -Encoding UTF8
       # Taskleisten-Programm auf den gewählten Namen umstellen
       Get-CimInstance Win32_Process -Filter "Name='powershell.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'Butchies-KI\.ps1' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
       $tp = Join-Path $Home2 "Butchies-KI.ps1"
@@ -941,10 +1171,14 @@ $ui.BtnNext.Add_Click({
     }
     6 { GeheZu 7 }
     7 { GeheZu 8 }
-    8 { $sync.StopFollow = $true; $w.Close() }
+    8 {
+      $sync.StopFollow = $true
+      Start-Process (Join-Path $sync.Home "desktop-app\Butchies-KI-Studio.exe")
+      $w.Close()
+    }
   }
 })
-$ui.BtnBack.Add_Click({ if ($script:step -gt 0 -and -not $sync.Busy) { GeheZu ($script:step - 1) } })
+$ui.BtnBack.Add_Click({ if ($script:step -gt 0 -and -not $sync.Busy) { GeheZu $(if ($script:step -eq 2 -and $sync.Choice.WindowsOnly) { 0 } else { $script:step - 1 }) } })
 $ui.BtnLog.Add_Click({
   $f = Join-Path $Home2 "setup-protokoll.txt"
   ($sync.Log -join "`r`n") | Set-Content $f -Encoding UTF8
@@ -982,7 +1216,21 @@ $timer.Add_Tick({
     "system-ok" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 2 } }
     "system-fail" { $sync.Done = ""; Fehler "Bitte die rot markierten Punkte beheben und mit »Zurück« erneut prüfen." }
     "payload" { $sync.Done = ""; if ($sync.ExtractDir) { Starte "windows" } }
-    "windows" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 3 } }
+    "windows" {
+      $sync.Done = ""; $ui.BtnNext.IsEnabled = $true
+      if ($sync.Choice.WindowsOnly) {
+        StudioStart
+      } elseif (AutoWeiter) { GeheZu 3 }
+    }
+    "studio-auth" {
+      $sync.Done = ""
+      $result = $sync.AuthResult
+      $ui.StudioSubmit.IsEnabled = $true
+      $ui.StudioSwitch.IsEnabled = $true
+      if ($result.Error) { $ui.StudioError.Text = $result.Error }
+      elseif ($result.Success) { StudioMode "success" }
+      else { StudioMode $result.Mode }
+    }
     "scan" { $sync.Done = ""; ZeigeDisks }
     "catalogsizes" { $sync.Done = ""; if ($script:step -eq 4) { ZeigeKiListe } }
     "online" { $sync.Done = ""; $ui.BtnNext.IsEnabled = $true; if (AutoWeiter) { GeheZu 7 } }
@@ -995,7 +1243,13 @@ $timer.Add_Tick({
 })
 $timer.Start()
 
-$w.Add_Closing({ $sync.StopFollow = $true })
+$w.Add_Closing({
+  $sync.StopFollow = $true
+  if ($sync.StartTrayOnClose) {
+    $trayPath = Join-Path $sync.Home "Butchies-KI.ps1"
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$trayPath`""
+  }
+})
 GeheZu 0
 Starte "start"
 [void]$w.ShowDialog()

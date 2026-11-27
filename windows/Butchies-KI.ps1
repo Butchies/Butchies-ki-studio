@@ -8,7 +8,7 @@
   * Weckseite http://localhost:8765 (Desktop-Verknüpfung "Butchies KI")
   * Das Abfragen des Status hält den Mini-PC NICHT wach.
 #>
-param([string]$MiniPC = "")
+param([string]$MiniPC = "", [switch]$OpenOnStart, [switch]$ConsoleOnly)
 
 $ErrorActionPreference = "Continue"
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing, PresentationFramework, PresentationCore, WindowsBase, WindowsFormsIntegration
@@ -23,8 +23,12 @@ $cfg = @{ host = "butchies-ki"; mac = ""; ip = "" }
 foreach ($f in @($cfgFile, (Join-Path $cfgDir "weck-helfer.json"))) {
   if (Test-Path $f) { try { $j = Get-Content $f -Raw | ConvertFrom-Json; foreach ($k in "host", "mac", "ip") { if ($j.$k) { $cfg[$k] = $j.$k } }; break } catch {} }
 }
-if ($MiniPC) { $cfg.host = $MiniPC }
+if ($MiniPC -and $MiniPC -ne $cfg.host) {
+  $cfg.host = $MiniPC; $cfg.ip = ""; $cfg.mac = ""
+  if (Test-Path $pwFile) { Remove-Item $pwFile -Force }
+}
 function Speichern { $cfg | ConvertTo-Json | Set-Content -Path $cfgFile -Encoding UTF8 }
+if ($cfg.host -ieq "butchies-ki.local") { $cfg.host = "butchies-ki"; Speichern }
 function LadePasswort {
   if (-not (Test-Path $pwFile)) { return "" }
   try {
@@ -37,25 +41,102 @@ function SpeicherePasswort($pw) {
   elseif (Test-Path $pwFile) { Remove-Item $pwFile -Force }
 }
 
+function OeffneLinuxKonsole {
+  $target = $cfg.host
+  if ($target -notmatch '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$') {
+    [Windows.Forms.MessageBox]::Show("Bitte in den Einstellungen einen gültigen Servernamen oder eine IPv4-Adresse hinterlegen.", "Linux-Konsole") | Out-Null
+    return
+  }
+  $ssh = Get-Command ssh.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $ssh) {
+    [Windows.Forms.MessageBox]::Show("Aktiviere unter Windows den OpenSSH-Client in den optionalen Features.", "Linux-Konsole") | Out-Null
+    return
+  }
+  Add-Type -AssemblyName Microsoft.VisualBasic
+  $user = [Microsoft.VisualBasic.Interaction]::InputBox("Linux-Benutzername für $target", "Linux-Konsole (SSH)", "butchies").Trim()
+  if (-not $user) { return }
+  if ($user -cnotmatch '^[a-z_][a-z0-9_-]{0,31}$') {
+    [Windows.Forms.MessageBox]::Show("Ungültiger Linux-Benutzername.", "Linux-Konsole") | Out-Null
+    return
+  }
+  $sshPath = $ssh.Source.Replace("'", "''")
+  $command = "& '$sshPath' -l '$user' -- '$target'"
+  $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($command))
+  Start-Process -FilePath (Join-Path $PSHOME "powershell.exe") -ArgumentList "-NoProfile", "-NoExit", "-EncodedCommand", $encoded
+}
+
+if ($ConsoleOnly) { OeffneLinuxKonsole; return }
+
 # --- Gemeinsamer Zustand mit dem Hintergrund-Thread -----------------------------
 $sync = [hashtable]::Synchronized(@{
-  Host = $cfg.host; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
-  State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
+  Host = $cfg.host; Base = ""; Ip = $cfg.ip; Mac = $cfg.mac; Password = (LadePasswort)
+  Remember = (Test-Path $pwFile); State = "unbekannt"; Status = $null; Version = 0; Stop = $false; Fast = $false
   Queue = New-Object System.Collections.Concurrent.ConcurrentQueue[string]
   Message = ""; Notify = ""; LastSeen = $null; LoginError = ""
+  TrayVersion = "0.4.28"; UpdateCache = (Join-Path $cfgDir "cache")
+  WindowsUpdate = $null; Updating = $false; UpdateNotice = ""
 })
 
 # --- Hintergrund-Thread: fragt den Mini-PC ab, führt Befehle aus ------------------
 $worker = {
   param($sync)
   $cookies = New-Object Net.CookieContainer
-  function Basis { if ($sync.Ip) { "http://$($sync.Ip)" } else { "http://$($sync.Host).local" } }
+
+  $githubDownload = "https://raw.githubusercontent.com/Butchies/Butchies-ki-studio/refs/heads/fix/0.4.8-studio-login/download"
+  [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+  $nextUpdateCheck = [datetime]::MinValue
+
+  function PruefeWindowsUpdate([bool]$manual) {
+    try {
+      $manifest = Invoke-RestMethod -UseBasicParsing -Uri "$githubDownload/update.json" -TimeoutSec 12 -ErrorAction Stop
+      if ($manifest.version -notmatch '^\d+\.\d+\.\d+$' -or $manifest.sha256 -notmatch '^[a-f0-9]{64}$') {
+        throw "Update-Metadaten ungültig."
+      }
+      if ([version]$manifest.version -gt [version]$sync.TrayVersion) {
+        $previous = $sync.WindowsUpdate
+        $sync.WindowsUpdate = $manifest
+        if ($manual -or -not $previous -or $previous.version -ne $manifest.version) {
+          $sync.UpdateNotice = "Windows-Update $($manifest.version) verfügbar. Im Taskleistenmenü kannst du es installieren."
+        }
+      } else {
+        $sync.WindowsUpdate = $null
+        if ($manual) { $sync.UpdateNotice = "Butchies KI für Windows ist aktuell ($($sync.TrayVersion))." }
+      }
+    } catch {
+      if ($manual) { $sync.UpdateNotice = "GitHub-Updateprüfung fehlgeschlagen: $($_.Exception.Message)" }
+    }
+  }
+
+  function InstalliereWindowsUpdate {
+    $manifest = $sync.WindowsUpdate
+    if (-not $manifest) { $sync.Updating = $false; return }
+    $part = $null
+    try {
+      New-Item -ItemType Directory -Force -Path $sync.UpdateCache -ErrorAction Stop | Out-Null
+      $setup = Join-Path $sync.UpdateCache ("Butchies-KI-Setup-" + $manifest.version + ".exe")
+      $part = "$setup.part"
+      Invoke-WebRequest -UseBasicParsing -Uri "$githubDownload/Butchies-KI-Setup.exe" -OutFile $part -TimeoutSec 90 -ErrorAction Stop
+      if ((Get-FileHash -Algorithm SHA256 -LiteralPath $part -ErrorAction Stop).Hash -ine $manifest.sha256) {
+        throw "Die Prüfsumme stimmt nicht. Bitte erneut nach Updates suchen."
+      }
+      Move-Item -LiteralPath $part -Destination $setup -Force -ErrorAction Stop
+      Start-Process -FilePath $setup -ErrorAction Stop
+    } catch {
+      $sync.UpdateNotice = "Windows-Update konnte nicht gestartet werden: $($_.Exception.Message)"
+    } finally {
+      if ($part -and (Test-Path -LiteralPath $part)) { Remove-Item -LiteralPath $part -Force -ErrorAction SilentlyContinue }
+      $sync.Updating = $false
+    }
+  }
+
   function Anfrage($method, $path, $body, $ms) {
     $result = @{ Code = 0; Text = "" }
-    foreach ($base in @((Basis), "http://$($sync.Host).local") | Select-Object -Unique) {
+    $bases = @("http://$($sync.Host)")
+    if ($sync.Ip) { $bases += "http://$($sync.Ip)" }
+    foreach ($base in ($bases | Select-Object -Unique)) {
       try {
         $req = [Net.HttpWebRequest]::Create("$base$path")
-        $req.Method = $method; $req.Timeout = $ms; $req.ReadWriteTimeout = $ms
+        $req.AllowAutoRedirect = $false; $req.Method = $method; $req.Timeout = $ms; $req.ReadWriteTimeout = $ms
         $req.CookieContainer = $cookies; $req.UserAgent = "ButchiesKI-Taskleiste"
         if ($body -ne $null) {
           $bytes = [Text.Encoding]::UTF8.GetBytes(($body | ConvertTo-Json -Compress))
@@ -64,10 +145,15 @@ $worker = {
         }
         $resp = $req.GetResponse()
         $sr = New-Object IO.StreamReader($resp.GetResponseStream(), [Text.Encoding]::UTF8)
-        $result.Text = $sr.ReadToEnd(); $result.Code = [int]$resp.StatusCode; $resp.Close()
+        $result.Text = $sr.ReadToEnd(); $result.Code = [int]$resp.StatusCode; $sync.Base = $base; $resp.Close()
         return $result
       } catch [Net.WebException] {
-        if ($_.Exception.Response) { $result.Code = [int]$_.Exception.Response.StatusCode; return $result }
+        if ($_.Exception.Response) {
+          $response = $_.Exception.Response
+          $result.Code = [int]$response.StatusCode
+          $response.Close()
+          if ($result.Code -eq 401) { $sync.Base = $base; return $result }
+        }
       } catch {}
     }
     return $result
@@ -84,7 +170,12 @@ $worker = {
   function Anmelden {
     if (-not $sync.Password) { $sync.State = "anmelden"; return $false }
     $r = Anfrage "POST" "/api/login" @{ password = $sync.Password } 5000
-    if ($r.Code -eq 200) { $sync.LoginError = ""; return $true }
+    if ($r.Code -eq 200) {
+      $sync.LoginError = ""
+      if ($sync.Remember) { $sync.AcceptedPassword = $sync.Password }
+      else { $sync.Password = "" }
+      return $true
+    }
     if ($r.Code -eq 401) { $sync.LoginError = "Passwort falsch"; $sync.Password = ""; $sync.State = "anmelden" }
     return $false
   }
@@ -96,12 +187,21 @@ $worker = {
       switch -Regex ($cmd) {
         "^wake$" { Wecken }
         "^login$" { [void](Anmelden) }
+        "^update-check$" {
+          PruefeWindowsUpdate $true
+          $nextUpdateCheck = [datetime]::UtcNow.AddHours(1)
+        }
+        "^update-install$" { InstalliereWindowsUpdate }
         "^(sleep|reboot|shutdown)$" {
           $r = Anfrage "POST" "/api/system/$cmd" @{} 5000
           $sync.Message = if ($r.Code -eq 200) { @{ sleep = "Mini-PC wird schlafen gelegt."; reboot = "Mini-PC startet neu."; shutdown = "Mini-PC fährt herunter." }[$cmd] } else { "Befehl fehlgeschlagen (Code $($r.Code))." }
           if ($r.Code -eq 200 -and $cmd -ne "reboot") { $sync.State = "schlaeft"; $sync.Status = $null; $sync.Version++ }
         }
       }
+    }
+    if ([datetime]::UtcNow -ge $nextUpdateCheck) {
+      PruefeWindowsUpdate $false
+      $nextUpdateCheck = [datetime]::UtcNow.AddHours(1)
     }
     # Status abfragen (GET hält den Mini-PC nicht wach)
     $r = Anfrage "GET" "/api/status" $null 2500
@@ -255,8 +355,9 @@ $xamlVorlage = @'
         <TextBlock Text="Passwort der Butchies-KI-Oberfläche:" Foreground="%Sub%" Margin="0,0,0,6"/>
         <PasswordBox x:Name="Pw" Height="32" Padding="6,5" Background="%Input%" Foreground="%Text%" BorderBrush="%BtnBorder%"/>
         <TextBlock x:Name="LoginMsg" Foreground="%Crit%" Margin="0,4,0,0"/>
+        <CheckBox x:Name="RememberLogin" Content="Automatisch anmelden" Margin="0,6,0,0"/>
         <Button x:Name="BtnLogin" Content="Anmelden" Style="{StaticResource Primary}" Margin="0,8,0,0"/>
-        <TextBlock Text="Wird verschlüsselt nur auf diesem PC gespeichert." Foreground="%Sub%" Margin="0,6,0,0" TextWrapping="Wrap"/>
+        <TextBlock Text="Bei automatischer Anmeldung speichert Windows das Passwort verschlüsselt." Foreground="%Sub%" Margin="0,6,0,0" TextWrapping="Wrap"/>
       </StackPanel>
 
       <StackPanel x:Name="DataPanel" Margin="0,14,0,0">
@@ -329,14 +430,9 @@ function Brush($hex) { (New-Object Windows.Media.BrushConverter).ConvertFromStri
 
 function OeffneOberflaeche {
   $sync.Queue.Enqueue("wake") | Out-Null
-  $acc = (WindowsDesign).Accent.TrimStart("#")
-  $url = "http://localhost:8765/?accent=$acc"
-  $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-  if ($edge) {
-    $prof = Join-Path $cfgDir "edge-profil"
-    $origins = "http://$($sync.Host).local" + $(if ($sync.Ip) { ",http://$($sync.Ip)" } else { "" })
-    Start-Process $edge -ArgumentList "--app=$url", "--user-data-dir=`"$prof`"", "--window-size=1400,900", "--unsafely-treat-insecure-origin-as-secure=$origins"
-  } else { Start-Process $url }
+  $desktop = Join-Path $cfgDir "desktop-app\Butchies-KI-Studio.exe"
+  if (Test-Path $desktop) { Start-Process -FilePath $desktop }
+  else { [Windows.Forms.MessageBox]::Show("Die Desktop-App fehlt. Führe den aktuellen Butchies-KI-Installer aus.", "Butchies KI Studio") | Out-Null }
 }
 
 function ZeigeFenster {
@@ -348,7 +444,7 @@ function ZeigeFenster {
   $w = [Windows.Markup.XamlReader]::Parse($xaml)
   [System.Windows.Forms.Integration.ElementHost]::EnableModelessKeyboardInterop($w)
   $n = @{}
-  foreach ($name in "Pill", "PillText", "Sub", "LoginPanel", "Pw", "LoginMsg", "BtnLogin", "DataPanel", "CpuText", "CpuBar", "RamText", "RamBar", "DiskText", "DiskBar", "TempText", "TpsText", "KiText", "JobBox", "JobPct", "JobName", "JobBlocks", "JobText", "UpdateText", "Info", "BtnOpen", "BtnSleep", "BtnReboot", "SettingsPanel", "HostBox", "AutoStart", "BtnSave", "BtnForget", "LinkShutdown", "LinkSettings", "LinkQuit") {
+  foreach ($name in "Pill", "PillText", "Sub", "LoginPanel", "Pw", "LoginMsg", "RememberLogin", "BtnLogin", "DataPanel", "CpuText", "CpuBar", "RamText", "RamBar", "DiskText", "DiskBar", "TempText", "TpsText", "KiText", "JobBox", "JobPct", "JobName", "JobBlocks", "JobText", "UpdateText", "Info", "BtnOpen", "BtnSleep", "BtnReboot", "SettingsPanel", "HostBox", "AutoStart", "BtnSave", "BtnForget", "LinkShutdown", "LinkSettings", "LinkQuit") {
     $n[$name] = $w.FindName($name)
   }
   for ($i = 0; $i -lt 20; $i++) { $r = New-Object Windows.Shapes.Rectangle; $r.Margin = "1,0,1,0"; $r.RadiusX = 1; $r.RadiusY = 1; [void]$n.JobBlocks.Children.Add($r) }
@@ -364,25 +460,28 @@ function ZeigeFenster {
   $n.LinkShutdown.Add_Click({
     if ([Windows.MessageBox]::Show("Mini-PC herunterfahren?`nEinschalten geht dann nur per Wake-on-LAN oder am Gerät.", "Butchies KI", "YesNo", "Warning") -eq "Yes") { $sync.Queue.Enqueue("shutdown") }
   })
+  $n.RememberLogin.IsChecked = $sync.Remember
   $n.BtnLogin.Add_Click({
     $pw = $script:win.Tag.N.Pw.Password
-    if ($pw.Length -lt 8) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 8 Zeichen."; return }
-    $sync.Password = $pw; SpeicherePasswort $pw; $sync.State = "unbekannt"; $sync.Queue.Enqueue("login")
+    if ($pw.Length -lt 4) { $script:win.Tag.N.LoginMsg.Text = "Mindestens 4 Zeichen."; return }
+    $sync.Remember = [bool]$script:win.Tag.N.RememberLogin.IsChecked
+    if (-not $sync.Remember) { $sync.AcceptedPassword = ""; SpeicherePasswort "" }
+    $sync.Password = $pw; $sync.Queue.Enqueue("login"); $script:win.Tag.N.Pw.Clear()
     $script:win.Tag.N.LoginMsg.Text = "Melde an …"
   })
   $n.LinkSettings.Add_Click({
     $p = $script:win.Tag.N.SettingsPanel
     $p.Visibility = if ($p.Visibility -eq "Visible") { "Collapsed" } else { "Visible" }
-    $script:win.Tag.N.HostBox.Text = $sync.Host
+    $script:win.Tag.N.HostBox.Text = $cfg.host
     $script:win.Tag.N.AutoStart.IsChecked = Test-Path $startupLnk
   })
   $n.BtnSave.Add_Click({
     $h = $script:win.Tag.N.HostBox.Text.Trim().ToLower()
-    if ($h -match '^[a-z0-9-]{1,30}$' -and $h -ne $sync.Host) { $sync.Host = $h; $sync.Ip = ""; $cfg.host = $h; $cfg.ip = ""; Speichern }
+    if ($h -match '^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$' -and $h -ne $cfg.host) { SpeicherePasswort ""; $sync.Password = ""; $sync.AcceptedPassword = ""; $sync.Base = ""; $sync.Host = $h; $sync.Ip = ""; $sync.Mac = ""; $cfg.host = $h; $cfg.ip = ""; $cfg.mac = ""; Speichern }
     AutostartSetzen ([bool]$script:win.Tag.N.AutoStart.IsChecked)
     $script:win.Tag.N.SettingsPanel.Visibility = "Collapsed"
   })
-  $n.BtnForget.Add_Click({ SpeicherePasswort ""; $sync.Password = ""; $sync.State = "anmelden"; $sync.Version++ })
+  $n.BtnForget.Add_Click({ SpeicherePasswort ""; $sync.Remember = $false; $sync.AcceptedPassword = ""; $sync.Password = ""; $sync.State = "anmelden"; $sync.Version++ })
   $n.LinkQuit.Add_Click({ Beenden })
   $w.Add_Deactivated({ if ($script:win) { $script:win.Close() } })
   $w.Add_Closed({ $script:win = $null; $script:closedAt = Get-Date; $sync.Fast = $false })
@@ -446,7 +545,7 @@ function FensterAktualisieren {
       $n.Info.Text = "Schläft in ca. $rest Minute$(if ($rest -ne 1) { 'n' }), wenn du ihn nicht benutzt."
     } else { $n.Info.Text = "Ruhezustand ist ausgeschaltet." }
   } else {
-    $n.Sub.Text = "$($sync.Host).local"
+    $n.Sub.Text = "$($sync.Host)"
     $n.Info.Text = switch ($state) {
       "schlaeft" { if ($sync.LastSeen) { "Zuletzt wach: $($sync.LastSeen.ToString('HH:mm')) Uhr. »Aufwecken« oder »Oberfläche öffnen« weckt ihn." } else { "Nicht erreichbar – schläft er, oder ist er aus?" } }
       "anmelden" { "Einmal anmelden, dann zeigt das Fenster alle Werte." }
@@ -507,8 +606,9 @@ function Antwort($ctx, $text, $type) {
   $ctx.Response.OutputStream.Write($b, 0, $b.Length); $ctx.Response.Close()
 }
 function Bearbeite($ctx) {
-  $wach = $sync.State -in @("wach", "arbeitet", "problem", "anmelden")
-  $ui = "http://$($sync.Host).local/"
+  $base = $sync.Base
+  $wach = $base -and ($sync.State -in @("wach", "arbeitet", "problem", "anmelden"))
+  $ui = "$base/"
   switch ($ctx.Request.Url.AbsolutePath) {
     "/wake" { $sync.Queue.Enqueue("wake"); $sync.Fast = $true; Antwort $ctx '{"ok":true}' "application/json" }
     "/status" { Antwort $ctx (@{ awake = $wach; url = $ui; mac = $sync.Mac } | ConvertTo-Json -Compress) "application/json" }
@@ -523,6 +623,14 @@ function Bearbeite($ctx) {
 $menu = New-Object Windows.Forms.ContextMenuStrip
 [void]$menu.Items.Add("Status anzeigen", $null, { ZeigeFenster })
 [void]$menu.Items.Add("Oberfläche öffnen", $null, { OeffneOberflaeche })
+[void]$menu.Items.Add("Linux-Konsole (SSH)", $null, { OeffneLinuxKonsole })
+[void]$menu.Items.Add("GitHub-Updates prüfen", $null, { $sync.Queue.Enqueue("update-check") })
+$installUpdate = $menu.Items.Add("Windows-Update installieren", $null, {
+  if (-not $sync.WindowsUpdate -or $sync.Updating) { return }
+  $sync.Updating = $true
+  $sync.Queue.Enqueue("update-install")
+})
+$installUpdate.Enabled = $false
 [void]$menu.Items.Add("Mini-PC aufwecken", $null, { $sync.Queue.Enqueue("wake") })
 [void]$menu.Items.Add("-")
 [void]$menu.Items.Add("Beenden", $null, { Beenden })
@@ -542,13 +650,22 @@ $timer.add_Tick({
     AktualisiereSymbol
     FensterAktualisieren
     if ($sync.Mac -and ($sync.Mac -ne $cfg.mac -or $sync.Ip -ne $cfg.ip)) { $cfg.mac = $sync.Mac; $cfg.ip = $sync.Ip; Speichern }
+    if ($sync.AcceptedPassword) { SpeicherePasswort $sync.AcceptedPassword; $sync.AcceptedPassword = "" }
+    $installUpdate.Enabled = [bool]$sync.WindowsUpdate -and -not $sync.Updating
+    $installUpdate.Text = if ($sync.Updating) { "Windows-Update wird geladen …" }
+      elseif ($sync.WindowsUpdate) { "Windows-Update $($sync.WindowsUpdate.version) installieren" }
+      else { "Windows-Update installieren" }
+    if ($sync.UpdateNotice) {
+      $tray.ShowBalloonTip(6500, "Butchies KI · GitHub", $sync.UpdateNotice, "Info")
+      $sync.UpdateNotice = ""
+    }
     if ($sync.Notify) { $tray.ShowBalloonTip(5000, "Butchies KI", $sync.Notify, "Info"); $sync.Notify = "" }
     if ($sync.Message -and -not $script:win) { $sync.Message = "" }
   }
 })
 $timer.Start()
 AktualisiereSymbol
-if (-not $sync.Password) { $sync.State = "anmelden"; $sync.Version++ }
+if ($OpenOnStart) { OeffneOberflaeche }
 
 [Windows.Forms.Application]::Run()
 $sync.Stop = $true
