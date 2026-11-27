@@ -643,16 +643,23 @@ function startApp() {
   clearInterval(pollTimer); pollTimer = setInterval(pollStatus, 4000);
 }
 
+
+// Studio lifecycle: UI only; never stops the KI server.
+const studioMotion=(()=>{const el=$("studio-splash"),msg=$("splash-message"),pref=$("studio-animation");let enabled=true;try{enabled=localStorage.getItem("bki-animation")!=="off"}catch(e){}pref.checked=enabled;pref.addEventListener("change",()=>{enabled=pref.checked;try{localStorage.setItem("bki-animation",enabled?"on":"off")}catch(e){}});const wait=ms=>new Promise(r=>setTimeout(r,ms));const motion=()=>enabled&&!matchMedia("(prefers-reduced-motion: reduce)").matches;let started=0;return{begin(){if(!motion())return;started=performance.now();el.className="studio-splash";msg.textContent="Starte …";el.hidden=false},async ready(label){if(el.hidden)return;await wait(Math.max(0,2200-(performance.now()-started)));msg.textContent=label;el.classList.add("ready");await wait(350);el.classList.add("fade");await wait(350);el.hidden=true},async exit(){if(!motion())return;el.className="studio-splash closing";msg.textContent="Studio wird beendet …";el.hidden=false;await wait(1500);el.hidden=true}}})();
+$("studio-exit").addEventListener("click",async()=>{const b=$("studio-exit");b.disabled=true;try{await studioMotion.exit();window.close();if(!window.closed){await api("/api/logout",{}).catch(()=>{});showGate(false)}}finally{b.disabled=false}});
+
 (async function init() {
+  studioMotion.begin();
   try {
     const s = await api("/api/state");
     if (s.needs_password) showGate(true);
     else if (!s.logged_in) showGate(false);
     else startApp();
+    await studioMotion.ready(s.needs_password || !s.logged_in ? 'Anmeldung bereit' : 'Oberfläche bereit');
   } catch (e) {
     document.body.textContent = "Butchies KI Studio ist gerade nicht erreichbar: " + e.message;
   }
 })();
 
 // Lokale Designauswahl, unabhängig von Server-Einstellungen und Chats.
-(function(){const valid=["system","fusion","architect","aurora","obsidian","horizon"];function apply(v){if(!valid.includes(v))v="system";document.documentElement.dataset.design=v;document.querySelectorAll("[data-theme-choice]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.themeChoice===v)));try{localStorage.setItem("bki-design",v)}catch(e){}}let v="system";try{v=localStorage.getItem("bki-design")||v}catch(e){}apply(v);document.querySelectorAll("[data-theme-choice]").forEach(b=>b.addEventListener("click",()=>apply(b.dataset.themeChoice)));const menu=document.getElementById("mobile-menu"),side=document.querySelector(".sidebar");function toggle(open){side.classList.toggle("menu-open",open);menu.setAttribute("aria-expanded",String(open))}menu.addEventListener("click",()=>toggle(!side.classList.contains("menu-open")));side.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",()=>toggle(false)));})();
+(function(){const valid=["system","fusion","architect","aurora","obsidian","horizon"];function apply(v){if(!valid.includes(v))v="system";document.documentElement.dataset.design=v;if(v!=="system"){document.documentElement.style.removeProperty("--accent");document.documentElement.style.removeProperty("--on-accent");}else{try{const a=localStorage.getItem("bki-accent");if(a&&/^[0-9a-f]{6}$/i.test(a)){document.documentElement.style.setProperty("--accent","#"+a);const n=parseInt(a,16);document.documentElement.style.setProperty("--on-accent",(.2126*(n>>16)+.7152*((n>>8)&255)+.0722*(n&255))/255>.55?"#000":"#fff");}}catch(e){}}document.querySelectorAll("[data-theme-choice]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.themeChoice===v)));try{localStorage.setItem("bki-design",v)}catch(e){}}let v="system";try{v=localStorage.getItem("bki-design")||v}catch(e){}apply(v);document.querySelectorAll("[data-theme-choice]").forEach(b=>b.addEventListener("click",()=>apply(b.dataset.themeChoice)));const menu=document.getElementById("mobile-menu"),side=document.querySelector(".sidebar");function toggle(open){side.classList.toggle("menu-open",open);menu.setAttribute("aria-expanded",String(open))}menu.addEventListener("click",()=>toggle(!side.classList.contains("menu-open")));side.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",()=>toggle(false)));})();
