@@ -653,3 +653,6 @@ function startApp() {
     document.body.textContent = "Butchies KI Studio ist gerade nicht erreichbar: " + e.message;
   }
 })();
+
+// Lokale Designauswahl, unabhängig von Server-Einstellungen und Chats.
+(function(){const valid=["system","fusion","architect","aurora","obsidian","horizon"];function apply(v){if(!valid.includes(v))v="system";document.documentElement.dataset.design=v;document.querySelectorAll("[data-theme-choice]").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.themeChoice===v)));try{localStorage.setItem("bki-design",v)}catch(e){}}let v="system";try{v=localStorage.getItem("bki-design")||v}catch(e){}apply(v);document.querySelectorAll("[data-theme-choice]").forEach(b=>b.addEventListener("click",()=>apply(b.dataset.themeChoice)));const menu=document.getElementById("mobile-menu"),side=document.querySelector(".sidebar");function toggle(open){side.classList.toggle("menu-open",open);menu.setAttribute("aria-expanded",String(open))}menu.addEventListener("click",()=>toggle(!side.classList.contains("menu-open")));side.querySelectorAll(".nav").forEach(b=>b.addEventListener("click",()=>toggle(false)));})();

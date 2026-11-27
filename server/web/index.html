@@ -28,7 +28,7 @@
 <div id="app" class="app" hidden>
   <header class="topbar">
     <div class="brand"><span class="logo" aria-hidden="true"></span>Butchies KI Studio <span class="accent">Offline</span></div>
-    <div class="topbar-right">
+    <div class="topbar-right"><button type="button" class="btn small mobile-menu" id="mobile-menu" aria-expanded="false">Menü</button>
       <span class="pill ok" id="llama-pill">KI: …</span>
       <button class="btn ghost small" id="logout-btn" type="button">Abmelden</button>
     </div>
@@ -164,7 +164,7 @@
 
     <!-- Einstellungen -->
     <main class="view" id="view-settings" hidden>
-      <h1>Einstellungen</h1>
+      <h1>Einstellungen</h1><section class="card form" aria-label="Design"><h2>Design</h2><p class="muted">Wähle deine Oberfläche. Die Auswahl bleibt auf diesem Gerät gespeichert.</p><div class="design-options"><button type="button" class="design-choice" data-theme-choice="system" aria-pressed="false">Windows / System</button><button type="button" class="design-choice" data-theme-choice="fusion" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#090f1a 45%,#131c2b 65%,#40caff)"></span>Fusion</button><button type="button" class="design-choice" data-theme-choice="architect" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#191b20 45%,#24282e 65%,#ff9b42)"></span>Architect</button><button type="button" class="design-choice" data-theme-choice="aurora" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#10162a 45%,#1c2940 65%,#65e8dc)"></span>Aurora Glass</button><button type="button" class="design-choice" data-theme-choice="obsidian" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#090d12 45%,#151c23 65%,#48c6f5)"></span>Obsidian</button><button type="button" class="design-choice" data-theme-choice="horizon" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#f3f6fc 45%,#ffffff 65%,#0868cf)"></span>Horizon</button></div></section>
       <form id="settings-form" class="card form">
         <h2>Ruhezustand</h2>
         <label class="check"><input type="checkbox" id="s-sleep"> Schlafen, wenn nicht benutzt</label>
