@@ -102,6 +102,7 @@ $("gate-form").addEventListener("submit", async (e) => {
 });
 
 $("logout-btn").addEventListener("click", async () => {
+  await studioMotion.exit();
   await api("/api/logout", {}).catch(() => {});
   showGate("login");
 });
@@ -1029,6 +1030,7 @@ function openSettingsSection(section) {
   document.querySelectorAll("[data-settings]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.settings === section)));
   const editor = workspaceLabels[section];
   $("workspace-editor").hidden = !editor;
+  $("design-panel").hidden = section !== "design";
   $("settings-form").hidden = section !== "performance";
   $("token-form").hidden = section !== "tokens";
   $("pw-form").hidden = section !== "password";
@@ -1421,12 +1423,28 @@ function startApp() {
   clearInterval(pollTimer); pollTimer = setInterval(pollStatus, 4000);
 }
 
+const themeChoices = [...document.querySelectorAll("[data-theme-choice]")];
+function applyTheme(value) {
+  const theme = themeChoices.some((choice) => choice.dataset.themeChoice === value) ? value : "system";
+  document.documentElement.dataset.design = theme;
+  themeChoices.forEach((choice) => choice.setAttribute("aria-pressed", String(choice.dataset.themeChoice === theme)));
+  try { localStorage.setItem("bki-design", theme); } catch (error) { /* storage unavailable */ }
+}
+let savedTheme;
+try { savedTheme = localStorage.getItem("bki-design"); } catch (error) { /* storage unavailable */ }
+applyTheme(savedTheme);
+themeChoices.forEach((choice) => choice.addEventListener("click", () => applyTheme(choice.dataset.themeChoice)));
+
+const studioMotion=(()=>{const el=$("studio-splash"),msg=$("splash-message"),pref=$("studio-animation");let enabled=true;try{enabled=localStorage.getItem("bki-animation")!=="off"}catch(e){}pref.checked=enabled;pref.addEventListener("change",()=>{enabled=pref.checked;try{localStorage.setItem("bki-animation",enabled?"on":"off")}catch(e){}});const wait=ms=>new Promise(r=>setTimeout(r,ms));const motion=()=>enabled&&!matchMedia("(prefers-reduced-motion: reduce)").matches;let started=0;return{begin(){if(!motion())return;started=performance.now();el.className="studio-splash";msg.textContent="Starte …";el.hidden=false},async ready(label){if(el.hidden)return;await wait(Math.max(0,2200-(performance.now()-started)));msg.textContent=label;el.classList.add("ready");await wait(350);el.classList.add("fade");await wait(350);el.hidden=true},async exit(){if(!motion())return;el.className="studio-splash closing";msg.textContent="Studio wird beendet …";el.hidden=false;await wait(1500);el.hidden=true}}})();
+
 (async function init() {
+  studioMotion.begin();
   try {
     const s = await api("/api/state");
     if (s.needs_password) showGate("setup");
     else if (!s.logged_in) showGate("login");
     else startApp();
+    await studioMotion.ready(s.logged_in ? "Oberfläche bereit" : "Anmeldung bereit");
   } catch (e) {
     document.body.textContent = "Butchies KI Studio ist gerade nicht erreichbar: " + e.message;
   }

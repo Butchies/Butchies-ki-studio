@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: PowerShell-Dateien auf Fehler prüfen
         shell: powershell
         run: |
@@ -54,7 +54,7 @@ jobs:
           $v = (Get-Content VERSION -Raw).Trim() + ".0"
           Invoke-ps2exe -inputFile "$env:RUNNER_TEMP\Setup-komplett.ps1" -outputFile Butchies-KI-Setup.exe -noConsole -requireAdmin -iconFile windows\logo.ico `
             -title "Butchies KI Studio Setup" -product "Butchies KI Studio" -company "Butchies" -version $v
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: Butchies-KI-Setup
           path: Butchies-KI-Setup.exe

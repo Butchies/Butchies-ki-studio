@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="/app.css">
 </head>
 <body>
+<div id="studio-splash" class="studio-splash" hidden role="status" aria-live="polite"><div class="splash-wave"></div><div class="splash-stage"><svg class="splash-cube" viewBox="0 0 240 240" aria-hidden="true"><defs><linearGradient id="cube-light"><stop stop-color="var(--accent)"/><stop offset="1" stop-color="var(--splash-secondary)"/></linearGradient></defs><ellipse class="splash-ring" cx="120" cy="205" rx="92" ry="17" fill="none" stroke="url(#cube-light)" stroke-width="2"/><g class="cube-body" stroke="url(#cube-light)" stroke-width="3" stroke-linejoin="round"><path d="M120 24 198 66 120 110 42 66Z" fill="var(--panel)"/><path d="M42 66 120 110 120 190 42 146Z" fill="var(--accent-dark)"/><path d="M120 110 198 66 198 146 120 190Z" fill="var(--panel)"/><path d="M53 79 53 138 109 169 M132 119 185 89 185 139 132 169 M66 65 120 36 174 65" fill="none" opacity=".45"/></g><text class="cube-label" x="120" y="138" text-anchor="middle" font-size="39" font-weight="800" fill="var(--text)">KI</text></svg><div class="splash-particles" aria-hidden="true"><i style="--dx:90px;--dy:0px;--delay:0ms"></i><i style="--dx:-70px;--dy:50px;--delay:19ms"></i><i style="--dx:9px;--dy:-78px;--delay:38ms"></i><i style="--dx:64px;--dy:65px;--delay:57ms"></i><i style="--dx:-108px;--dy:-15px;--delay:76ms"></i><i style="--dx:97px;--dy:-48px;--delay:95ms"></i><i style="--dx:-31px;--dy:91px;--delay:114ms"></i><i style="--dx:-58px;--dy:-87px;--delay:133ms"></i><i style="--dx:122px;--dy:35px;--delay:152ms"></i><i style="--dx:-125px;--dy:40px;--delay:171ms"></i><i style="--dx:59px;--dy:-100px;--delay:190ms"></i><i style="--dx:43px;--dy:109px;--delay:209ms"></i><i style="--dx:-130px;--dy:-59px;--delay:228ms"></i><i style="--dx:151px;--dy:-26px;--delay:247ms"></i><i style="--dx:-92px;--dy:103px;--delay:266ms"></i><i style="--dx:-21px;--dy:-129px;--delay:285ms"></i><i style="--dx:130px;--dy:86px;--delay:304ms"></i><i style="--dx:-175px;--dy:6px;--delay:323ms"></i><i style="--dx:128px;--dy:-100px;--delay:342ms"></i><i style="--dx:-9px;--dy:146px;--delay:361ms"></i><i style="--dx:-122px;--dy:-115px;--delay:380ms"></i><i style="--dx:193px;--dy:21px;--delay:399ms"></i><i style="--dx:-164px;--dy:90px;--delay:418ms"></i><i style="--dx:45px;--dy:-158px;--delay:437ms"></i></div><div class="splash-title">Butchies KI Studio <strong>5.0</strong></div><div class="splash-track" aria-hidden="true"><span></span></div><div id="splash-message">Starte …</div></div></div>
 
 <!-- Anmeldung / Ersteinrichtung -->
 <div id="gate" class="gate" hidden>
@@ -69,7 +70,8 @@
       <button type="button" data-mobile-action="system">Updates und Protokoll</button>
     </details>
     <details><summary>Einstellungen</summary>
-      <button type="button" data-mobile-settings="setup">KI einrichten</button>
+        <button type="button" data-mobile-settings="design">Darstellung</button>
+    <button type="button" data-mobile-settings="setup">KI einrichten</button>
       <button type="button" data-mobile-action="models">Modelle</button>
       <button type="button" data-mobile-settings="bots">KI-Bots</button>
       <button type="button" data-mobile-settings="memory">Gedächtnis</button>
@@ -288,6 +290,7 @@
     <main class="view" id="view-settings" hidden>
       <h1>Einstellungen</h1>
       <div class="settings-sections" aria-label="Einstellungsbereiche">
+        <button class="btn small" data-settings="design">Darstellung</button>
         <button class="btn small" data-settings="setup">KI einrichten</button>
         <button class="btn small" data-settings="bots">KI-Bots</button>
         <button class="btn small" data-settings="memory">Gedächtnis</button>
@@ -301,6 +304,7 @@
         <button class="btn small" data-settings="connection">Verbindung</button>
         <button class="btn small" data-settings="password">Passwort</button>
       </div>
+      <section class="card form" id="design-panel" aria-label="Darstellung" hidden><h2>Design</h2><label class="check"><input type="checkbox" id="studio-animation" checked> Start- und Beenden-Animation</label><p class="muted">Wähle deine Oberfläche. Die Auswahl bleibt auf diesem Gerät gespeichert.</p><div class="design-options"><button type="button" class="design-choice" data-theme-choice="system" aria-pressed="false">Windows / System</button><button type="button" class="design-choice" data-theme-choice="fusion" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#090f1a 45%,#131c2b 65%,#40caff)"></span>Fusion</button><button type="button" class="design-choice" data-theme-choice="architect" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#191b20 45%,#24282e 65%,#ff9b42)"></span>Architect</button><button type="button" class="design-choice" data-theme-choice="aurora" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#10162a 45%,#1c2940 65%,#65e8dc)"></span>Aurora Glass</button><button type="button" class="design-choice" data-theme-choice="obsidian" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#090d12 45%,#151c23 65%,#48c6f5)"></span>Obsidian</button><button type="button" class="design-choice" data-theme-choice="horizon" aria-pressed="false"><span class="design-swatch" style="background:linear-gradient(110deg,#f3f6fc 45%,#ffffff 65%,#0868cf)"></span>Horizon</button></div></section>
       <section id="ki-setup-panel" class="card form" hidden>
         <h2>KI einrichten</h2>
         <dl class="setup-status">
