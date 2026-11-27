@@ -540,13 +540,13 @@ if (-not (Test-Path $script:designPath)) { Save-StudioDesign "fusion" }
 $studioP = StudioPalette
 $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Butchies KI Studio 5.0 – Einrichtung" Width="900" Height="640" ResizeMode="CanMinimize" WindowStyle="None" AllowsTransparency="True" WindowStartupLocation="CenterScreen"
+        Title="Butchies KI Studio 5.0 – Einrichtung" Width="1100" Height="760" ResizeMode="CanMinimize" WindowStyle="None" AllowsTransparency="True" WindowStartupLocation="CenterScreen"
         Background="Transparent" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#1A1A1A">
   <Window.Resources>
     <SolidColorBrush x:Key="Acc" Color="#0067C0"/>
     <Style x:Key="Btn" TargetType="Button">
-      <Setter Property="Height" Value="34"/><Setter Property="MinWidth" Value="110"/><Setter Property="Padding" Value="16,0"/>
-      <Setter Property="Background" Value="#FBFBFB"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Height" Value="46"/><Setter Property="MinWidth" Value="140"/><Setter Property="Padding" Value="16,0"/>
+      <Setter Property="Background"><Setter.Value><LinearGradientBrush StartPoint="0,0" EndPoint="0,1"><GradientStop Color="#D1D1D1" Offset="0"/><GradientStop Color="#FBFBFB" Offset=".35"/><GradientStop Color="#F3F3F3" Offset="1"/></LinearGradientBrush></Setter.Value></Setter><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
         <Border x:Name="b" CornerRadius="10" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="{TemplateBinding Padding}">
           <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
@@ -556,7 +556,7 @@ $xaml = @'
         </ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Btn}">
-      <Setter Property="Background" Value="#0067C0"/><Setter Property="BorderBrush" Value="#0067C0"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="Background"><Setter.Value><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#0067C0" Offset="0"/><GradientStop Color="#9FD8FF" Offset="1"/></LinearGradientBrush></Setter.Value></Setter><Setter Property="BorderBrush" Value="#0067C0"/><Setter Property="Foreground" Value="White"/><Setter Property="FontWeight" Value="SemiBold"/>
     </Style>
     <Style TargetType="TextBox"><Setter Property="Background" Value="#FBFBFB"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
     <Style TargetType="PasswordBox"><Setter Property="Background" Value="#FBFBFB"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
@@ -564,12 +564,12 @@ $xaml = @'
   </Window.Resources>
   <Border CornerRadius="18" Background="#F3F3F3" BorderBrush="#0067C0" BorderThickness="1" Padding="8">
   <Grid>
-    <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition/><RowDefinition Height="64"/></Grid.RowDefinitions>
-    <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition/></Grid.ColumnDefinitions>
+    <Grid.RowDefinitions><RowDefinition Height="64"/><RowDefinition/><RowDefinition Height="76"/></Grid.RowDefinitions>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="255"/><ColumnDefinition/></Grid.ColumnDefinitions>
 
     <!-- Kopfzeile -->
     <Border x:Name="StudioHeader" CornerRadius="12,12,0,0" Grid.ColumnSpan="2" Background="#EEEEEE" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
-      <DockPanel Margin="16,0"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="StudioMin" Content="−" Width="34" Height="30" Background="#FBFBFB" Foreground="#1A1A1A" Margin="6,0,4,0"/><Button x:Name="StudioClose" Content="×" Width="34" Height="30" Background="#FBFBFB" Foreground="#1A1A1A"/></StackPanel>
+      <DockPanel Margin="16,0"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="StudioMin" Content="−" Style="{StaticResource Btn}" MinWidth="0" Width="38" Height="30" Background="#FBFBFB" Foreground="#1A1A1A" Margin="6,0,4,0"/><Button x:Name="StudioClose" Content="×" Style="{StaticResource Btn}" MinWidth="0" Width="38" Height="30" Background="#FBFBFB" Foreground="#1A1A1A"/></StackPanel>
         <Border DockPanel.Dock="Right" x:Name="AutoPill" CornerRadius="14" Background="#E5F1FB" Padding="10,4" VerticalAlignment="Center" Cursor="Hand">
           <StackPanel Orientation="Horizontal">
             <Ellipse x:Name="AutoDot" Width="8" Height="8" Fill="#0067C0" Margin="0,0,8,0" VerticalAlignment="Center"/>
@@ -579,7 +579,7 @@ $xaml = @'
         </Border>
         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
           <Viewbox Width="26" Height="26"><Canvas Width="100" Height="100"><Rectangle Canvas.Left="4" Canvas.Top="4" Width="92" Height="92" RadiusX="22" RadiusY="22" Fill="#0067C0"/><Path Data="M33,24 H53 C63,24 69,29 69,37 C69,42 66,46 62,47 C68,48 72,53 72,59 C72,68 65,74 54,74 H33 Z" Stroke="White" StrokeThickness="8" StrokeLineJoin="Round"/><Ellipse Canvas.Left="72.5" Canvas.Top="16.5" Width="11" Height="11" Fill="#9FD8FF"/><Line X1="69" Y1="31" X2="75" Y2="25" Stroke="#9FD8FF" StrokeThickness="3.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/></Canvas></Viewbox>
-          <TextBlock Text="Butchies KI Studio – Einrichtung" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
+          <TextBlock Text="Butchies KI Studio 5.0" FontSize="23" Margin="10,0,0,0" VerticalAlignment="Center" FontWeight="SemiBold"/>
           <TextBlock x:Name="VerText" Margin="10,0,0,0" VerticalAlignment="Center" Foreground="#5C5C5C"/>
         </StackPanel>
       </DockPanel>
@@ -592,18 +592,19 @@ $xaml = @'
 
     <!-- Seiten -->
     <Grid Grid.Row="1" Grid.Column="1" Margin="28,22,28,10">
+<Viewbox IsHitTestVisible="False" Stretch="Fill" Opacity=".24"><Canvas Width="800" Height="580"><Path Data="M0,80 C230,330 460,10 800,160 M0,95 C230,345 460,25 800,175 M0,110 C230,360 460,40 800,190" Stroke="#0067C0" StrokeThickness="2"/><Path Data="M0,480 C260,600 490,310 800,400 M0,490 C260,610 490,320 800,410 M0,500 C260,620 490,330 800,420" Stroke="#9FD8FF" StrokeThickness="2"/></Canvas></Viewbox>
       <!-- 1 Willkommen -->
       <StackPanel x:Name="PgWelcome" VerticalAlignment="Center" HorizontalAlignment="Center">
-        <Grid Width="190" Height="180" HorizontalAlignment="Center">
-          <Border x:Name="Logo" Width="164" Height="164" Background="Transparent">
+        <Grid Width="260" Height="245" HorizontalAlignment="Center">
+          <Border x:Name="Logo" Width="225" Height="225" Background="Transparent">
             <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
             <Border.Effect><DropShadowEffect Color="#0067C0" BlurRadius="30" ShadowDepth="0" Opacity="0.45"/></Border.Effect>
-            <Viewbox Width="164" Height="164"><Canvas Width="160" Height="160"><Ellipse Canvas.Left="15" Canvas.Top="121" Width="130" Height="22" Stroke="#0067C0" StrokeThickness="2"/><Ellipse x:Name="Orbit" Canvas.Left="9" Canvas.Top="54" Width="142" Height="48" Stroke="#9FD8FF" StrokeThickness="2" StrokeDashArray="12 4" RenderTransformOrigin=".5,.5"><Ellipse.RenderTransform><RotateTransform Angle="-20"/></Ellipse.RenderTransform></Ellipse><Path Data="M80,10 L135,40 L80,70 L25,40 Z M25,40 L80,70 L80,128 L25,98 Z M80,70 L135,40 L135,98 L80,128 Z" Stroke="#0067C0" StrokeThickness="2.5" StrokeLineJoin="Round"><Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFBFB" Offset="0"/><GradientStop Color="#0067C0" Offset=".48"/><GradientStop Color="#FBFBFB" Offset="1"/></LinearGradientBrush></Path.Fill></Path><Path Data="M80,10 L135,40 L135,98 L80,128" Stroke="#9FD8FF" StrokeThickness="3"/><TextBlock Canvas.Left="57" Canvas.Top="75" Text="KI" FontSize="29" FontWeight="Bold" Foreground="#1A1A1A"/></Canvas></Viewbox>
+            <Viewbox Width="225" Height="225"><Canvas Width="160" Height="160"><Ellipse Canvas.Left="15" Canvas.Top="121" Width="130" Height="22" Stroke="#0067C0" StrokeThickness="2"/><Ellipse x:Name="Orbit" Canvas.Left="9" Canvas.Top="54" Width="142" Height="48" Stroke="#9FD8FF" StrokeThickness="2" StrokeDashArray="12 4" RenderTransformOrigin=".5,.5"><Ellipse.RenderTransform><RotateTransform Angle="-20"/></Ellipse.RenderTransform></Ellipse><Path Data="M80,10 L135,40 L80,70 L25,40 Z" Stroke="#0067C0" StrokeThickness="1.5"><Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#F3F3F3" Offset="0"/><GradientStop Color="#0067C0" Offset=".6"/><GradientStop Color="#FBFBFB" Offset="1"/></LinearGradientBrush></Path.Fill></Path><Path Data="M25,40 L80,70 L80,128 L25,98 Z" Stroke="#0067C0" StrokeThickness="2"><Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#0067C0" Offset="0"/><GradientStop Color="#F3F3F3" Offset=".5"/><GradientStop Color="#FBFBFB" Offset="1"/></LinearGradientBrush></Path.Fill></Path><Path Data="M80,70 L135,40 L135,98 L80,128 Z" Stroke="#9FD8FF" StrokeThickness="2"><Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#9FD8FF" Offset="0"/><GradientStop Color="#F3F3F3" Offset=".45"/><GradientStop Color="#FBFBFB" Offset="1"/></LinearGradientBrush></Path.Fill></Path><Path Data="M31,48 L74,72 L74,117 L31,94 Z M86,73 L129,49 L129,94 L86,118 Z" Stroke="#9FD8FF" StrokeThickness=".7" Opacity=".65"/><Path Data="M80,10 L135,40 L135,98 L80,128" Stroke="#9FD8FF" StrokeThickness="3"/><TextBlock Canvas.Left="39" Canvas.Top="75" Text="KI" FontSize="29" FontWeight="Bold" Foreground="#1A1A1A"/></Canvas></Viewbox>
           </Border>
         </Grid>
-        <TextBlock Text="Willkommen bei Butchies KI Studio" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,6"/>
-        <TextBlock TextWrapping="Wrap" TextAlignment="Center" MaxWidth="460" Foreground="#5C5C5C" Text="Der Assistent richtet zuerst deinen Windows-PC ein und baut dann den USB-Stick für den Mini-PC – alles geprüft und auf dem neuesten Stand."/>
-        <TextBlock x:Name="WelcomeInfo" HorizontalAlignment="Center" Margin="0,14,0,0" Foreground="#0F6B0F"/>
+        <TextBlock Text="Butchies KI Studio 5.0" FontSize="38" FontStyle="Italic" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,6"/>
+        <TextBlock Text="E I N R I C H T U N G" FontSize="15" Foreground="#0067C0" HorizontalAlignment="Center" Margin="0,0,0,16"/><TextBlock Text="Willkommen bei Butchies KI Studio" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,8"/><TextBlock TextWrapping="Wrap" TextAlignment="Center" MaxWidth="550" Foreground="#5C5C5C" Text="Der Assistent richtet zuerst deinen Windows-PC ein und baut dann den USB-Stick für den Mini-PC – alles geprüft und auf dem neuesten Stand."/>
+        <Border CornerRadius="12" BorderBrush="#0067C0" BorderThickness="1" Background="#FBFBFB" Padding="18,12" Margin="0,18,0,0"><TextBlock x:Name="WelcomeInfo" TextWrapping="Wrap" MaxWidth="540" HorizontalAlignment="Center" Foreground="#0067C0" FontWeight="SemiBold"/></Border>
       </StackPanel>
 
       <!-- Allgemeine Fortschritts-Seite -->
@@ -763,9 +764,9 @@ function ZeigeSchritte {
       $b.Effect = New-Object Windows.Media.Effects.DropShadowEffect -Property @{ Color = [Windows.Media.Color]::FromRgb(0, 103, 192); BlurRadius = 12; ShadowDepth = 0; Opacity = 0.6 } }
     else { $b.BorderBrush = Brush "#C4C4C4"; $b.BorderThickness = 1; $t.Text = "$($i + 1)"; $t.Foreground = Brush "#5C5C5C" }
     $b.Child = $t
-    $l = New-Object Windows.Controls.TextBlock; $l.Text = $Steps[$i]; $l.Margin = "10,0,0,0"; $l.VerticalAlignment = "Center"
+    $l = New-Object Windows.Controls.TextBlock; $l.Text = $Steps[$i]; $l.FontSize=14; $l.Margin = "10,0,0,0"; $l.VerticalAlignment = "Center"
     if ($i -eq $script:step) { $l.FontWeight = "SemiBold" } else { $l.Foreground = Brush "#5C5C5C" }
-    [void]$sp.Children.Add($b); [void]$sp.Children.Add($l);  $tile = New-Object Windows.Controls.Border; $tile.CornerRadius=9; $tile.Padding="8,5"; $tile.Margin="0,0,0,3"; $sp.Margin="0"; $tile.Background=Brush $(if ($i -eq $script:step) {"#D1D1D1"} else {"#FBFBFB"}); $tile.Child=$sp; [void]$ui.StepList.Children.Add($tile)
+    [void]$sp.Children.Add($b); $glyph=New-Object Windows.Controls.TextBlock; $glyph.FontFamily="Segoe MDL2 Assets"; $glyph.Text=[string][char](@(0xE80F,0xE9D9,0xE7F4,0xE88E,0xE950,0xE77B,0xE774,0xE896,0xE73E)[$i]); $glyph.Foreground=Brush "#0067C0"; $glyph.FontSize=17; $glyph.Margin="10,0,0,0"; $glyph.VerticalAlignment="Center"; [void]$sp.Children.Add($glyph); [void]$sp.Children.Add($l);  $tile = New-Object Windows.Controls.Border; $tile.CornerRadius=9; $tile.Padding="9,9"; $tile.Margin="0,0,0,5"; $tile.BorderThickness=1; $tile.BorderBrush=Brush $(if ($i -eq $script:step) {"#0067C0"} else {"#D1D1D1"}); $sp.Margin="0"; $tile.Background=Brush $(if ($i -eq $script:step) {"#D1D1D1"} else {"#FBFBFB"}); $tile.Child=$sp; [void]$ui.StepList.Children.Add($tile)
   }
 }
 
