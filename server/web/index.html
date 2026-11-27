@@ -46,6 +46,7 @@
       <button class="nav" data-view="discover" type="button">Entdecken</button>
       <button class="nav" data-view="settings" type="button">Einstellungen</button>
     </nav>
+    <span id="mobile-online" role="status"></span>
     <div class="topbar-right">
       <span class="studio-host" id="studio-host" title="Studio-Adresse"></span>
       <span class="pill ok" id="llama-pill">KI: …</span>
@@ -53,6 +54,37 @@
       <button class="btn ghost small" id="logout-btn" type="button">Abmelden</button>
     </div>
   </header>
+  <dialog id="mobile-menu" aria-labelledby="mobile-menu-title">
+    <header><strong id="mobile-menu-title">Menü</strong><button class="btn" id="mobile-menu-close" type="button" aria-label="Menü schließen">×</button></header>
+    <button type="button" data-mobile-action="chat">Chat öffnen</button>
+    <button type="button" data-mobile-action="new">Neuer Chat</button>
+    <button type="button" data-mobile-action="history">Verlauf</button>
+    <details><summary>Werkzeuge</summary>
+      <button type="button" data-mobile-action="ext">Erweiterungen</button>
+      <button type="button" data-mobile-action="images" id="mobile-images" hidden>Bilder erzeugen</button>
+      <button type="button" data-mobile-action="discover">Entdecken</button>
+    </details>
+    <details><summary>Server</summary>
+      <button type="button" data-mobile-action="status">Serverstatus</button>
+      <button type="button" data-mobile-action="system">Updates und Protokoll</button>
+    </details>
+    <details><summary>Einstellungen</summary>
+      <button type="button" data-mobile-settings="setup">KI einrichten</button>
+      <button type="button" data-mobile-action="models">Modelle</button>
+      <button type="button" data-mobile-settings="bots">KI-Bots</button>
+      <button type="button" data-mobile-settings="memory">Gedächtnis</button>
+      <button type="button" data-mobile-settings="library">Bibliothek</button>
+      <button type="button" data-mobile-settings="tokens">Token-Kosten</button>
+      <button type="button" data-mobile-settings="performance">Leistung und Updates</button>
+      <button type="button" data-mobile-settings="image-tools">Bildwerkzeuge</button>
+      <button type="button" data-mobile-settings="web-search">Internet-Recherche</button>
+      <button type="button" data-mobile-settings="backup">Backup und Export</button>
+      <button type="button" data-mobile-settings="developer">Git und Entwicklung</button>
+      <button type="button" data-mobile-settings="connection">Verbindung</button>
+      <button type="button" data-mobile-settings="password">Passwort</button>
+    </details>
+    <button type="button" data-mobile-action="logout">Abmelden</button>
+  </dialog>
   <p id="gate-success" role="status" hidden></p>
 
   <div id="job-banner" class="job-banner" hidden>
@@ -101,6 +133,7 @@
             <option value="work">Work · Schritt für Schritt</option>
           </select>
         </div>
+        <button class="btn mobile-attachments" id="mobile-attachments" type="button" aria-label="Anhänge und Chatoptionen" aria-controls="composer" aria-expanded="false">+</button>
         <details class="chat-workspace">
           <summary>Bot und Quellen</summary>
           <label for="chat-bot">KI-Bot</label>

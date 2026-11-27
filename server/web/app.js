@@ -110,6 +110,51 @@ $("logout-btn").addEventListener("click", async () => {
 document.querySelectorAll(".nav").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
 const sidebar = $("studio-sidebar");
 const sidebarToggle = $("sidebar-toggle");
+const mobileLayout = matchMedia("(max-width: 720px)");
+const mobileMenu = $("mobile-menu");
+function openMobileMenu() {
+  sidebarToggle.setAttribute("aria-expanded", "true");
+  mobileMenu.showModal();
+}
+$("mobile-menu-close").addEventListener("click", () => mobileMenu.close());
+mobileMenu.addEventListener("close", () => {
+  if (sidebar.inert) sidebarToggle.setAttribute("aria-expanded", "false");
+});
+mobileLayout.addEventListener("change", () => {
+  closeSidebar();
+  if (mobileMenu.open) mobileMenu.close();
+  sidebarToggle.setAttribute("aria-controls", mobileLayout.matches ? "mobile-menu" : "studio-sidebar");
+  sidebarToggle.setAttribute("aria-label", mobileLayout.matches ? "Menü öffnen" : "Chatverlauf öffnen");
+});
+if (mobileLayout.matches) {
+  sidebarToggle.setAttribute("aria-controls", "mobile-menu");
+  sidebarToggle.setAttribute("aria-label", "Menü öffnen");
+}
+mobileMenu.addEventListener("click", (event) => {
+  const item = event.target.closest("button[data-mobile-action], button[data-mobile-settings]");
+  if (!item) return;
+  mobileMenu.close();
+  const action = item.dataset.mobileAction;
+  if (item.dataset.mobileSettings) {
+    setView("settings");
+    openSettingsSection(item.dataset.mobileSettings);
+  } else if (action === "history") {
+    sidebarPinned = true;
+    showSidebar(true);
+    $("new-chat").focus();
+  } else if (action === "new") newChat();
+  else if (action === "logout") $("logout-btn").click();
+  else if (action === "status") {
+    setView("chat");
+    const status = document.querySelector(".status-drawer");
+    status.open = true;
+    status.querySelector("summary").focus();
+  } else setView(action);
+});
+$("mobile-attachments").addEventListener("click", (event) => {
+  const expanded = $("composer").classList.toggle("mobile-options-open");
+  event.currentTarget.setAttribute("aria-expanded", String(expanded));
+});
 let sidebarPinned = false;
 let sidebarTimer;
 function showSidebar(open, restoreFocus = false) {
@@ -118,13 +163,17 @@ function showSidebar(open, restoreFocus = false) {
   if (!open && (restoreFocus || sidebar.contains(document.activeElement))) sidebarToggle.focus();
   sidebar.inert = !open;
   sidebarToggle.setAttribute("aria-expanded", String(open));
-  sidebarToggle.setAttribute("aria-label", open ? "Chatverlauf schließen" : "Chatverlauf öffnen");
+  sidebarToggle.setAttribute("aria-label", open ? "Chatverlauf schließen" : mobileLayout.matches ? "Menü öffnen" : "Chatverlauf öffnen");
 }
 function closeSidebar(restoreFocus = false) {
   sidebarPinned = false;
   showSidebar(false, restoreFocus);
 }
 sidebarToggle.addEventListener("click", () => {
+  if (mobileLayout.matches && !sidebarPinned) {
+    openMobileMenu();
+    return;
+  }
   if (sidebarPinned) closeSidebar(true);
   else {
     sidebarPinned = true;
@@ -156,6 +205,7 @@ document.addEventListener("keydown", (event) => {
 
 function setView(v) {
   closeSidebar();
+  if (v !== "chat" && mobileLayout.matches) document.querySelector(".status-drawer").open = false;
   state.view = v;
   $("app").dataset.view = v;
   document.querySelectorAll(".nav").forEach((b) => {
@@ -262,7 +312,7 @@ function renderStatus(s) {
     if (engines.includes(previous)) select.value = previous;
     updateImageForm();
   }
-  $("nav-images").hidden = !engines.length;
+  $("nav-images").hidden = $("mobile-images").hidden = !engines.length;
   $("chat-image-create").hidden = !engines.length;
   if (state.pendingImage && !s.job?.running) finishChatImage();
   $("img-btn").hidden = !ext.vision;
@@ -278,6 +328,7 @@ function renderStatus(s) {
   }
   state.lastJob = s.job;
 
+  $("mobile-online").textContent = "Online";
   $("studio-online").textContent = "Server online";
   $("studio-online").classList.add("connected");
   const diskFraction = s.disk_total > 0 ? s.disk_used / s.disk_total : 0;
@@ -313,6 +364,7 @@ function renderStatus(s) {
 async function pollStatus() {
   try { renderStatus(await api("/api/status")); }
   catch (e) {
+    $("mobile-online").textContent = "Offline";
     $("studio-online").textContent = "Serverstatus nicht verfügbar";
     $("studio-online").classList.remove("connected");
   }
@@ -605,7 +657,7 @@ $("chat-model").addEventListener("change", async () => {
 });
 
 $("input").addEventListener("keydown", (e) => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); }
+  if (e.key === "Enter" && !e.shiftKey && !mobileLayout.matches) { e.preventDefault(); $("composer").requestSubmit(); }
 });
 
 $("attach-btn").addEventListener("click", () => $("attach").click());
