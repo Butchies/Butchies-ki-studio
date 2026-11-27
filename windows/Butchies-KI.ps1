@@ -136,35 +136,6 @@ $ps = [powershell]::Create(); $ps.Runspace = $rs
 $handle = $ps.BeginInvoke()
 
 # --- Windows-Design (hell/dunkel + Akzentfarbe) ----------------------------------
-
-# Gemeinsame lokale Designwahl (Installer und Taskleisten-App).
-$script:designPath = Join-Path (Join-Path $env:APPDATA "ButchiesKI") "design.txt"
-$script:designNames = @("fusion","architect","aurora","obsidian","horizon","system")
-function Read-StudioDesign {
-  try { $v = (Get-Content -LiteralPath $script:designPath -Raw -ErrorAction Stop).Trim().ToLowerInvariant(); if ($v -in $script:designNames) { return $v } } catch {}
-  return "fusion"
-}
-function Save-StudioDesign([string]$v) {
-  if ($v -notin $script:designNames) { return }
-  New-Item -ItemType Directory -Force -Path (Split-Path $script:designPath) | Out-Null
-  [IO.File]::WriteAllText($script:designPath,$v)
-}
-function StudioPalette {
-  switch (Read-StudioDesign) {
-    "fusion" { return @("#090F1A","#131C2B","#26374D","#F4F7FF","#A5B5CE","#40CAFF","#D37AFA","#07121E") }
-    "architect" { return @("#191B20","#24282E","#383D45","#F7F4EF","#B7B3AD","#FF9B42","#FFD0A0","#211205") }
-    "aurora" { return @("#10162A","#1C2940","#34465D","#F2F7FF","#A8BBD0","#65E8DC","#A978FF","#082626") }
-    "obsidian" { return @("#090D12","#151C23","#28333E","#F3F7FA","#A9B9C8","#48C6F5","#A4E5FF","#06141C") }
-    "horizon" { return @("#F3F6FC","#FFFFFF","#D8E2EF","#17263B","#53667F","#0868CF","#82B9FF","#FFFFFF") }
-    default { return @("#F3F3F3","#FBFBFB","#D1D1D1","#1A1A1A","#5C5C5C","#0067C0","#9FD8FF","#FFFFFF") }
-  }
-}
-function StudioFade($window,[bool]$opening) {
-  if (-not [Windows.SystemParameters]::ClientAreaAnimation) { return }
-  $a = if ($opening) { New-Object Windows.Media.Animation.DoubleAnimation(0,1,[TimeSpan]::FromMilliseconds(350)) } else { New-Object Windows.Media.Animation.DoubleAnimation(1,0,[TimeSpan]::FromMilliseconds(300)) }
-  $window.BeginAnimation([Windows.UIElement]::OpacityProperty,$a)
-}
-
 function WindowsDesign {
   $light = $true
   try { $light = (Get-ItemProperty "HKCU:\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize").AppsUseLightTheme -ne 0 } catch {}
@@ -187,11 +158,6 @@ function WindowsDesign {
        Btn = "#3A3A3A"; BtnBorder = "#4A4A4A"; Ok = "#8FD88A"; OkBg = "#2D3B2C"; Crit = "#FF99A4"; Sep = "#3D3D3D"; Input = "#1F1F1F"; Ram = "#9FD8FF" }
   }
   $t.Accent = $hex; $t.OnAccent = if ($lum -gt 0.55) { "#000000" } else { "#FFFFFF" }; $t.AccentColor = $acc; $t.Light = $light
-  if ((Read-StudioDesign) -ne "system") {
-    $p=StudioPalette
-    $t.Bg=$p[0]; $t.Card=$p[1]; $t.Btn=$p[1]; $t.Input=$p[0]; $t.Border=$p[2]; $t.CardBorder=$p[2]; $t.BtnBorder=$p[2]; $t.Track=$p[2]; $t.Sep=$p[2]; $t.Text=$p[3]; $t.Sub=$p[4]; $t.Accent=$p[5]; $t.Ram=$p[6]; $t.OnAccent=$p[7]; $t.AccentColor=[Drawing.ColorTranslator]::FromHtml($p[5]); $t.Light=(Read-StudioDesign) -eq "horizon"
-    if ($t.Light) { $t.Ok="#146C35"; $t.OkBg="#DFF6DD"; $t.Crit="#B42318" } else { $t.Ok="#8DE8B7"; $t.OkBg="#20382F"; $t.Crit="#FF9AA9" }
-  }
   return $t
 }
 
@@ -364,7 +330,7 @@ function Brush($hex) { (New-Object Windows.Media.BrushConverter).ConvertFromStri
 function OeffneOberflaeche {
   $sync.Queue.Enqueue("wake") | Out-Null
   $acc = (WindowsDesign).Accent.TrimStart("#")
-  $url = "http://localhost:8765/?accent=$acc&design=$(Read-StudioDesign)&desktop=1"
+  $url = "http://localhost:8765/?accent=$acc"
   $edge = @("${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe", "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
   if ($edge) {
     $prof = Join-Path $cfgDir "edge-profil"
@@ -430,7 +396,7 @@ function ZeigeFenster {
   $script:win = $w
   $sync.Fast = $true
   FensterAktualisieren
-  $w.Show(); StudioFade $w $true; [void]$w.Activate()
+  $w.Show(); [void]$w.Activate()
 }
 
 function FensterAktualisieren {
@@ -518,7 +484,7 @@ $page = @'
 <script>
 let n=0;
 async function tick(){n++;try{const r=await (await fetch("/status",{cache:"no-store"})).json();
-if(r.awake){document.getElementById("t").textContent="Wach – öffne Butchies KI …";location.href=r.url+(location.search||"?design=DESIGN&desktop=1");return;}
+if(r.awake){document.getElementById("t").textContent="Wach – öffne Butchies KI …";location.href=r.url+location.search;return;}
 if(!r.mac){document.getElementById("m").textContent="Die MAC-Adresse ist noch unbekannt. Mini-PC einmal normal einschalten – dann merkt sich das Programm sie.";}
 }catch(e){}
 if(n%10===0)fetch("/wake").catch(()=>{});
@@ -544,26 +510,11 @@ function Bearbeite($ctx) {
   $wach = $sync.State -in @("wach", "arbeitet", "problem", "anmelden")
   $ui = "http://$($sync.Host).local/"
   switch ($ctx.Request.Url.AbsolutePath) {
-    "/design" {
-      $origin=$ctx.Request.Headers["Origin"]
-      $allowed=@("http://$($sync.Host).local")
-      if ($sync.Ip) { $allowed += "http://$($sync.Ip)" }
-      if ($origin -notin $allowed) { $ctx.Response.StatusCode=403; $ctx.Response.Close(); return }
-      $ctx.Response.Headers.Add("Access-Control-Allow-Origin",$origin)
-      $ctx.Response.Headers.Add("Access-Control-Allow-Methods","POST, OPTIONS")
-      $ctx.Response.Headers.Add("Access-Control-Allow-Private-Network","true")
-      if ($ctx.Request.HttpMethod -eq "OPTIONS") { $ctx.Response.Close(); return }
-      $v=$ctx.Request.QueryString["value"]
-      if ($ctx.Request.HttpMethod -ne "POST" -or $v -notin $script:designNames) { $ctx.Response.StatusCode=400; $ctx.Response.Close(); return }
-      Save-StudioDesign $v
-      AktualisiereSymbol
-      Antwort $ctx '{"ok":true}' "application/json"
-    }
     "/wake" { $sync.Queue.Enqueue("wake"); $sync.Fast = $true; Antwort $ctx '{"ok":true}' "application/json" }
     "/status" { Antwort $ctx (@{ awake = $wach; url = $ui; mac = $sync.Mac } | ConvertTo-Json -Compress) "application/json" }
     default {
-      if ($wach) { $q=$ctx.Request.Url.Query; if ($q -notmatch '(^|[?&])design=') { $q += $(if ($q) { "&" } else { "?" }) + "design=$(Read-StudioDesign)&desktop=1" }; $ctx.Response.Redirect($ui + $q); $ctx.Response.Close() }
-      else { $sync.Fast = $true; $p=StudioPalette; Antwort $ctx $page.Replace("ACCENT", (WindowsDesign).Accent).Replace("CanvasText",$p[3]).Replace("Canvas",$p[0]).Replace("DESIGN",(Read-StudioDesign)) "text/html; charset=utf-8" }
+      if ($wach) { $ctx.Response.Redirect($ui + $ctx.Request.Url.Query); $ctx.Response.Close() }
+      else { $sync.Fast = $true; Antwort $ctx $page.Replace("ACCENT", (WindowsDesign).Accent) "text/html; charset=utf-8" }
     }
   }
 }
@@ -575,8 +526,6 @@ $menu = New-Object Windows.Forms.ContextMenuStrip
 [void]$menu.Items.Add("Mini-PC aufwecken", $null, { $sync.Queue.Enqueue("wake") })
 [void]$menu.Items.Add("-")
 [void]$menu.Items.Add("Beenden", $null, { Beenden })
-$designMenu = $menu.Items.Add("Design")
-foreach ($v in $script:designNames) { $item=$designMenu.DropDownItems.Add($v); $item.Tag=$v; $item.Add_Click({ param($sender,$e) Save-StudioDesign ([string]$sender.Tag); if ($script:win) { $script:win.Close() }; AktualisiereSymbol }) }
 $tray.ContextMenuStrip = $menu
 $tray.add_MouseClick({ param($s, $e) if ($e.Button -eq "Left") { ZeigeFenster } })
 
