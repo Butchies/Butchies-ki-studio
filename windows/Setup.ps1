@@ -540,19 +540,19 @@ if (-not (Test-Path $script:designPath)) { Save-StudioDesign "fusion" }
 $studioP = StudioPalette
 $xaml = @'
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Butchies KI Studio 5.0 – Einrichtung" Width="900" Height="640" ResizeMode="CanMinimize" WindowStartupLocation="CenterScreen"
-        Background="#F3F3F3" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#1A1A1A">
+        Title="Butchies KI Studio 5.0 – Einrichtung" Width="900" Height="640" ResizeMode="CanMinimize" WindowStyle="None" AllowsTransparency="True" WindowStartupLocation="CenterScreen"
+        Background="Transparent" FontFamily="Segoe UI Variable Text, Segoe UI" FontSize="13" Foreground="#1A1A1A">
   <Window.Resources>
     <SolidColorBrush x:Key="Acc" Color="#0067C0"/>
     <Style x:Key="Btn" TargetType="Button">
       <Setter Property="Height" Value="34"/><Setter Property="MinWidth" Value="110"/><Setter Property="Padding" Value="16,0"/>
-      <Setter Property="Background" Value="#FBFBFB"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Background" Value="#FBFBFB"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="Cursor" Value="Hand"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="FontWeight" Value="SemiBold"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
-        <Border x:Name="b" CornerRadius="4" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="{TemplateBinding Padding}">
+        <Border x:Name="b" CornerRadius="10" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" Padding="{TemplateBinding Padding}">
           <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.86"/></Trigger>
-          <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.45"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="#0067C0"/><Setter TargetName="b" Property="Opacity" Value="0.88"/></Trigger>
+          <Trigger Property="IsPressed" Value="True"><Setter TargetName="b" Property="Opacity" Value="0.65"/></Trigger><Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.45"/></Trigger>
         </ControlTemplate.Triggers></ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Btn}">
@@ -562,13 +562,14 @@ $xaml = @'
     <Style TargetType="PasswordBox"><Setter Property="Background" Value="#FBFBFB"/><Setter Property="Foreground" Value="#1A1A1A"/><Setter Property="Height" Value="32"/><Setter Property="Padding" Value="8,5"/><Setter Property="BorderBrush" Value="#D1D1D1"/><Setter Property="BorderThickness" Value="1,1,1,2"/></Style>
     <Style x:Key="Card" TargetType="Border"><Setter Property="Background" Value="White"/><Setter Property="BorderBrush" Value="#E5E5E5"/><Setter Property="BorderThickness" Value="1"/><Setter Property="CornerRadius" Value="8"/><Setter Property="Padding" Value="12,9"/></Style>
   </Window.Resources>
+  <Border CornerRadius="18" Background="#F3F3F3" BorderBrush="#0067C0" BorderThickness="1" Padding="8">
   <Grid>
     <Grid.RowDefinitions><RowDefinition Height="48"/><RowDefinition/><RowDefinition Height="64"/></Grid.RowDefinitions>
     <Grid.ColumnDefinitions><ColumnDefinition Width="210"/><ColumnDefinition/></Grid.ColumnDefinitions>
 
     <!-- Kopfzeile -->
-    <Border Grid.ColumnSpan="2" Background="#EEEEEE" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
-      <DockPanel Margin="16,0">
+    <Border x:Name="StudioHeader" CornerRadius="12,12,0,0" Grid.ColumnSpan="2" Background="#EEEEEE" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+      <DockPanel Margin="16,0"><StackPanel DockPanel.Dock="Right" Orientation="Horizontal"><Button x:Name="StudioMin" Content="−" Width="34" Height="30" Background="#FBFBFB" Foreground="#1A1A1A" Margin="6,0,4,0"/><Button x:Name="StudioClose" Content="×" Width="34" Height="30" Background="#FBFBFB" Foreground="#1A1A1A"/></StackPanel>
         <Border DockPanel.Dock="Right" x:Name="AutoPill" CornerRadius="14" Background="#E5F1FB" Padding="10,4" VerticalAlignment="Center" Cursor="Hand">
           <StackPanel Orientation="Horizontal">
             <Ellipse x:Name="AutoDot" Width="8" Height="8" Fill="#0067C0" Margin="0,0,8,0" VerticalAlignment="Center"/>
@@ -593,11 +594,11 @@ $xaml = @'
     <Grid Grid.Row="1" Grid.Column="1" Margin="28,22,28,10">
       <!-- 1 Willkommen -->
       <StackPanel x:Name="PgWelcome" VerticalAlignment="Center" HorizontalAlignment="Center">
-        <Grid Width="120" Height="120" HorizontalAlignment="Center">
-          <Border x:Name="Logo" Width="112" Height="112" Background="Transparent">
+        <Grid Width="190" Height="180" HorizontalAlignment="Center">
+          <Border x:Name="Logo" Width="164" Height="164" Background="Transparent">
             <Border.RenderTransform><TranslateTransform/></Border.RenderTransform>
             <Border.Effect><DropShadowEffect Color="#0067C0" BlurRadius="30" ShadowDepth="0" Opacity="0.45"/></Border.Effect>
-            <Viewbox Width="112" Height="112"><Canvas Width="120" Height="120"><Ellipse Canvas.Left="12" Canvas.Top="97" Width="96" Height="15" Stroke="#0067C0" StrokeThickness="2"/><Path Data="M60,6 L106,31 L60,57 L14,31 Z M14,31 L60,57 L60,96 L14,70 Z M60,57 L106,31 L106,70 L60,96 Z" Fill="#FBFBFB" Stroke="#0067C0" StrokeThickness="2.5" StrokeLineJoin="Round"/><Path Data="M60,6 L106,31 L106,70 L60,96" Stroke="#9FD8FF" StrokeThickness="3" Fill="Transparent"/><TextBlock Canvas.Left="39" Canvas.Top="47" Text="KI" FontSize="27" FontWeight="Bold" Foreground="#0067C0"/></Canvas></Viewbox>
+            <Viewbox Width="164" Height="164"><Canvas Width="160" Height="160"><Ellipse Canvas.Left="15" Canvas.Top="121" Width="130" Height="22" Stroke="#0067C0" StrokeThickness="2"/><Ellipse x:Name="Orbit" Canvas.Left="9" Canvas.Top="54" Width="142" Height="48" Stroke="#9FD8FF" StrokeThickness="2" StrokeDashArray="12 4" RenderTransformOrigin=".5,.5"><Ellipse.RenderTransform><RotateTransform Angle="-20"/></Ellipse.RenderTransform></Ellipse><Path Data="M80,10 L135,40 L80,70 L25,40 Z M25,40 L80,70 L80,128 L25,98 Z M80,70 L135,40 L135,98 L80,128 Z" Stroke="#0067C0" StrokeThickness="2.5" StrokeLineJoin="Round"><Path.Fill><LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#FBFBFB" Offset="0"/><GradientStop Color="#0067C0" Offset=".48"/><GradientStop Color="#FBFBFB" Offset="1"/></LinearGradientBrush></Path.Fill></Path><Path Data="M80,10 L135,40 L135,98 L80,128" Stroke="#9FD8FF" StrokeThickness="3"/><TextBlock Canvas.Left="57" Canvas.Top="75" Text="KI" FontSize="29" FontWeight="Bold" Foreground="#1A1A1A"/></Canvas></Viewbox>
           </Border>
         </Grid>
         <TextBlock Text="Willkommen bei Butchies KI Studio" FontSize="26" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,18,0,6"/>
@@ -708,6 +709,7 @@ $xaml = @'
       </DockPanel>
     </Border>
   </Grid>
+</Border>
 </Window>
 '@
 
@@ -717,6 +719,9 @@ $xaml = $xaml.Replace('Property="Foreground" Value="White"','Property="Foregroun
 for ($i=0;$i -lt $studioP.Count;$i++) { $xaml=$xaml.Replace("%STUDIO$i%",$studioP[$i]) }
 $w = [Windows.Markup.XamlReader]::Parse($xaml)
 $w.Add_Loaded({ StudioFade $w $true })
+$w.FindName("StudioMin").Add_Click({ $w.WindowState = "Minimized" })
+$w.FindName("StudioClose").Add_Click({ $w.Close() })
+$w.FindName("StudioHeader").Add_MouseLeftButtonDown({ param($sender,$e) if ($e.OriginalSource -is [Windows.Controls.TextBlock] -or $e.OriginalSource -is [Windows.Controls.Border]) { try { $w.DragMove() } catch {} } })
 try { $w.Icon = [Windows.Media.Imaging.BitmapFrame]::Create([IO.MemoryStream]::new([Convert]::FromBase64String($LogoPng))) } catch {}
 $ui = @{}
 foreach ($n in "AutoPill", "AutoDot", "AutoToggle", "VerText", "StepList", "PgWelcome", "Logo", "WelcomeInfo", "PgRows", "RowsTitle", "RowsSub", "BigBox", "BigPct", "BigText", "Blocks", "KiCard", "KiSelf", "KiText", "Rows",
@@ -732,7 +737,16 @@ function SetBlocks($grid, $p) { $on = [Math]::Floor($p / 5); for ($i = 0; $i -lt
 $fa = New-Object Windows.Media.Animation.DoubleAnimation(0, -8, [TimeSpan]::FromMilliseconds(1500))
 $fa.AutoReverse = $true; $fa.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
 $fa.EasingFunction = New-Object Windows.Media.Animation.SineEase
+if ([Windows.SystemParameters]::ClientAreaAnimation) {
 $ui.Logo.RenderTransform.BeginAnimation([Windows.Media.TranslateTransform]::YProperty, $fa)
+$orbit = $w.FindName("Orbit")
+$spin = New-Object Windows.Media.Animation.DoubleAnimation(-20,340,[TimeSpan]::FromSeconds(8))
+$spin.RepeatBehavior = [Windows.Media.Animation.RepeatBehavior]::Forever
+$orbit.RenderTransform.BeginAnimation([Windows.Media.RotateTransform]::AngleProperty,$spin)
+$pulse = New-Object Windows.Media.Animation.DoubleAnimation(0.35,0.8,[TimeSpan]::FromSeconds(1.8))
+$pulse.AutoReverse=$true; $pulse.RepeatBehavior=[Windows.Media.Animation.RepeatBehavior]::Forever
+$ui.Logo.Effect.BeginAnimation([Windows.Media.Effects.DropShadowEffect]::OpacityProperty,$pulse)
+}
 
 $Steps = @("Willkommen", "Systemprüfung", "Windows-Teil", "USB-Stick", "KI-Auswahl", "Zugangsdaten", "Online-Prüfung", "Stick erstellen", "Fertig")
 $script:step = 0
@@ -751,7 +765,7 @@ function ZeigeSchritte {
     $b.Child = $t
     $l = New-Object Windows.Controls.TextBlock; $l.Text = $Steps[$i]; $l.Margin = "10,0,0,0"; $l.VerticalAlignment = "Center"
     if ($i -eq $script:step) { $l.FontWeight = "SemiBold" } else { $l.Foreground = Brush "#5C5C5C" }
-    [void]$sp.Children.Add($b); [void]$sp.Children.Add($l); [void]$ui.StepList.Children.Add($sp)
+    [void]$sp.Children.Add($b); [void]$sp.Children.Add($l);  $tile = New-Object Windows.Controls.Border; $tile.CornerRadius=9; $tile.Padding="8,5"; $tile.Margin="0,0,0,3"; $sp.Margin="0"; $tile.Background=Brush $(if ($i -eq $script:step) {"#D1D1D1"} else {"#FBFBFB"}); $tile.Child=$sp; [void]$ui.StepList.Children.Add($tile)
   }
 }
 
